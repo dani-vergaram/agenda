@@ -158,6 +158,18 @@ ul { list-style: none; margin: 0; padding: 0; }
 }
 .proximas { display: grid; gap: 2px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .proximas h3 { margin: 0 0 4px; font: 600 .75rem/1.3 var(--body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.resumen h3 { color: var(--ink); }
+.cifras { margin: 0 0 6px; color: var(--muted); font-size: .8125rem; }
+.res-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; padding: 4px 6px; border-radius: 6px; font-size: .8125rem; }
+.res-item.ev { background: color-mix(in srgb, var(--ev) var(--mix-ev), var(--paper)); }
+.res-item b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.res-item .meta { grid-column: 2; padding-left: 0; }
+.res-item .pto { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--pend); align-self: center; }
+.res-item .pto.alta { background: var(--sem-r); border-color: var(--sem-r); }
+.res-item .pto.media { background: var(--sem-a); border-color: var(--sem-a); }
+.res-item .pto.baja { background: var(--sem-v); border-color: var(--sem-v); }
+.res-item.hecho span { color: var(--muted); text-decoration: line-through; }
+.res-nota { margin: 6px 0 0; padding: 6px 8px; border-left: 3px solid var(--rule); color: var(--muted); font-size: .8125rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .prox { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; justify-items: start; padding: 6px 6px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: .8125rem; }
 .prox:hover { background: var(--soft); }
 .prox b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -271,6 +283,7 @@ ul { list-style: none; margin: 0; padding: 0; }
       </div>
       <div class="cal" id="cal"></div>
       <p class="leyenda"><span>Punto: pendientes de un tema o municipio</span><span>Anillo: reunión</span><span><b>Rojo:</b> festivo</span></p>
+      <div class="proximas resumen" id="resumenDia"></div>
       <div class="proximas" id="proximas"></div>
     </section>
     <section class="tarjeta notas">
@@ -618,6 +631,7 @@ function pintarCal() {
     b.onclick = () => irA(s, "dia");
     cal.append(b);
   }
+  pintarResumen(porDia, porHora);
   const prox = todos().filter(([, t]) => esEv(t) && t.fecha && t.fecha >= hoy && t.estado === "pendiente").map(([id, t]) => t)
     .sort((a, b) => (a.fecha + (a.hora || "")).localeCompare(b.fecha + (b.hora || ""))).slice(0, 5);
   $("proximas").hidden = !prox.length;
@@ -628,6 +642,30 @@ function pintarCal() {
     b.onclick = () => irA(t.fecha, "dia");
     return b;
   }));
+}
+function pintarResumen(porDia, porHora) {
+  const d = S.dia, hoy = hoyIso(), fest = festivo(d);
+  const delDia = todos().filter(([, t]) => t.fecha === d).map(([, t]) => t);
+  const evs = delDia.filter(t => esEv(t) && t.estado !== "tachado").sort(porHora);
+  const pend = delDia.filter(t => !esEv(t) && t.estado === "pendiente").sort((a, b) => rangoPrio(a) - rangoPrio(b));
+  const hechos = delDia.filter(t => !esEv(t) && t.estado === "hecho");
+  const atr = d === hoy ? atrasados().map(([, t]) => t) : [];
+  const etiquetas = t => h("span", { className: "meta" }, t.area ? h("span", { className: "tag " + t.area.toLowerCase() }, t.area) : null, (t.tema || t.municipio) ? etiquetaCat(t.tema || t.municipio) : null);
+  const plural = (n, a, b) => n + " " + (n === 1 ? a : b);
+  const cifras = [plural(evs.length, "reunión", "reuniones"), plural(pend.length, "pendiente", "pendientes"), plural(hechos.length, "realizado", "realizados")];
+  if (atr.length) cifras.push(plural(atr.length, "atrasado", "atrasados"));
+  const filas = [
+    ...evs.map(t => h("div", { className: "res-item ev" }, h("b", {}, t.hora ? fmtHora(t.hora) : "Todo el día"), h("span", {}, t.texto), etiquetas(t))),
+    ...pend.slice(0, 6).map(t => h("div", { className: "res-item" }, h("i", { className: "pto " + (t.prioridad || "") }), h("span", {}, t.texto), etiquetas(t))),
+    pend.length > 6 ? h("p", { className: "cifras" }, "y " + (pend.length - 6) + " pendientes más") : null,
+    ...hechos.slice(0, 3).map(t => h("div", { className: "res-item hecho" }, h("b", {}, "✓"), h("span", {}, t.texto))),
+    atr.length ? h("p", { className: "cifras" }, plural(atr.length, "pendiente viene", "pendientes vienen") + " de días anteriores.") : null
+  ];
+  const nota = ((S.notas.get(d) || {}).texto || "").trim();
+  $("resumenDia").replaceChildren(
+    h("h3", {}, "Resumen · " + corto(d) + (fest ? " · festivo" : "")),
+    h("p", { className: "cifras" }, (evs.length || pend.length || hechos.length || atr.length) ? cifras.join(" · ") : "Día libre: sin reuniones ni pendientes."),
+    ...[...filas, nota ? h("p", { className: "res-nota" }, nota.length > 160 ? nota.slice(0, 160) + "…" : nota) : null].filter(Boolean));
 }
 function colorCat(t) {
   if (t.municipio || t.tema) return colorDe(t.municipio || t.tema);
