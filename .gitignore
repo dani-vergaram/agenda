@@ -1,0 +1,4 @@
+watch/.gradle/
+watch/build/
+watch/app/build/
+.DS_Store

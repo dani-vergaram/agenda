@@ -1,0 +1,24 @@
+plugins { id "com.android.application" }
+
+// Toma los datos de Firebase del mismo archivo que usa la app web.
+def cfg = rootProject.file("../web/firebase-config.js").text
+def valor = { String k -> (cfg =~ /${k}:\s*"([^"]+)"/)[0][1] }
+
+android {
+    namespace "co.daniela.agenda"
+    compileSdk 34
+    defaultConfig {
+        applicationId "co.daniela.agenda"
+        minSdk 30
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        buildConfigField "String", "API_KEY", "\"${valor('apiKey')}\""
+        buildConfigField "String", "PROJECT_ID", "\"${valor('projectId')}\""
+    }
+    buildFeatures { buildConfig true }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
