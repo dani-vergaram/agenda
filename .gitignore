@@ -2,3 +2,6 @@ watch/.gradle/
 watch/build/
 watch/app/build/
 .DS_Store
+movil/.gradle/
+movil/build/
+movil/app/build/

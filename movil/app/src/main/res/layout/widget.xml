@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/raiz"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/fondo">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <TextView
+            android:id="@+id/titulo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Agenda"
+            android:textColor="#FF1E2A2F"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/refrescar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp"
+            android:text="↻"
+            android:textColor="#FF3E9F93"
+            android:textSize="20sp" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/cuerpo"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:lineSpacingExtra="3dp"
+        android:text="Cargando…"
+        android:textColor="#FF1E2A2F"
+        android:textSize="13sp" />
+    <TextView
+        android:id="@+id/pie"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#FF5F6B6F"
+        android:textSize="11sp" />
+</LinearLayout>

@@ -3,6 +3,8 @@ plugins { id "com.android.application" }
 // Toma los datos de Firebase del mismo archivo que usa la app web.
 def cfg = rootProject.file("../web/firebase-config.js").text
 def valor = { String k -> (cfg =~ /${k}:\s*"([^"]+)"/)[0][1] }
+def firma = new Properties()
+firma.load(rootProject.file("../firma.properties").newInputStream())
 
 android {
     namespace "co.daniela.agenda"
@@ -15,6 +17,17 @@ android {
         versionName "1.0"
         buildConfigField "String", "API_KEY", "\"${valor('apiKey')}\""
         buildConfigField "String", "PROJECT_ID", "\"${valor('projectId')}\""
+    }
+    signingConfigs {
+        agenda {
+            storeFile rootProject.file("../firma.jks")
+            storePassword firma.storePassword
+            keyAlias firma.keyAlias
+            keyPassword firma.storePassword
+        }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.agenda }
     }
     buildFeatures { buildConfig true }
     compileOptions {

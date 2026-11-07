@@ -960,7 +960,7 @@ const V = "https://www.gstatic.com/firebasejs/10.12.2/";
     }, err));
     parar.push(F.onSnapshot(F.doc(fsdb, "users", u.uid, "ajustes", "entidades"), d => {
       if (d.exists()) { ENT = (d.data().lista || []).map(e => ({ ...e })); entFalta = false; render(); pintarColoresEnt(); if ($("editarEnt").open && !$("editarEnt").contains(document.activeElement)) pintarEntidades(); }
-      else if (!d.metadata.fromCache) { entFalta = true; revisarEnt(); }
+      else if (!(d.metadata && d.metadata.fromCache)) { entFalta = true; revisarEnt(); }
     }, () => {}));
     parar.push(F.onSnapshot(F.doc(fsdb, "users", u.uid, "ajustes", "colores"), d => {
       if (d.exists()) { aplicarColores(d.data()); try { localStorage.setItem("agenda-colores", JSON.stringify(colores)); } catch (e) {} }
