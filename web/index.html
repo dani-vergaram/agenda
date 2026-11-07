@@ -66,8 +66,7 @@ main, aside { display: grid; gap: 18px; min-width: 0; }
 .chip:hover { border-color: var(--accent); }
 .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .tag { padding: 0 7px; border-radius: 99px; font-size: .6875rem; font-weight: 700; letter-spacing: .04em; line-height: 1.6; }
-.tag.car { background: color-mix(in srgb, var(--car) var(--mix-tag), var(--paper)); color: var(--ink); }
-.tag.uaesp { background: color-mix(in srgb, var(--uaesp) var(--mix-tag), var(--paper)); color: var(--ink); }
+.tag.ent { background: color-mix(in srgb, var(--cat) var(--mix-tag), var(--paper)); color: var(--ink); }
 .task.evento { grid-template-columns: 70px minmax(0, 1fr) auto auto; background: color-mix(in srgb, var(--ev) var(--mix-ev), var(--paper)); box-shadow: inset 4px 0 0 var(--ev); }
 .hora { margin-top: 4px; font-size: .875rem; font-weight: 700; line-height: 1.3; font-variant-numeric: tabular-nums; }
 .task.evento[data-estado="tachado"] .hora { color: var(--muted); text-decoration: line-through; }
@@ -86,8 +85,15 @@ main, aside { display: grid; gap: 18px; min-width: 0; }
 .tag.muni { background: var(--paper); border: 1px solid var(--line); color: var(--ink); font-weight: 600; letter-spacing: 0; }
 .munis { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 4px; }
 .munis .chip { min-height: 30px; padding: 0 11px; font-size: .8125rem; }
-#nuevoMunicipio { width: 170px; }
-#nuevoTema { width: 200px; }
+#nuevaSub { width: 190px; }
+.ent-edit { display: grid; gap: 8px; padding: 10px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.ent-edit .fila-ent { display: flex; gap: 8px; align-items: center; }
+.ent-edit input[type="text"], .ent-edit textarea { width: 100%; min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.ent-edit textarea { min-height: 84px; resize: vertical; }
+.ent-edit input, .ent-edit textarea { font: 400 .875rem/1.4 var(--body); color: var(--ink); }
+.mes-head h2.normal { text-transform: none; }
+.ent-edit input[type="color"] { flex: none; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; }
+.ent-edit label { display: grid; gap: 3px; font-size: .75rem; font-weight: 600; color: var(--muted); }
 .fila input[type="text"] { min-height: 34px; width: 150px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
 .tag.muni.conColor { background: color-mix(in srgb, var(--cat) var(--mix-tag), var(--paper)); border-color: var(--cat); }
 .chip.conColor::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--cat); }
@@ -249,15 +255,9 @@ ul { list-style: none; margin: 0; padding: 0; }
       <button class="tab" id="tabEventos" role="tab" type="button">Reuniones</button>
       <button class="tab" id="tabHechos" role="tab" type="button">Realizadas</button>
     </div>
-    <div class="areas" role="group" aria-label="Ver pendientes de">
-      <button class="chip" type="button" data-area="">Todo</button>
-      <button class="chip" type="button" data-area="CAR">CAR</button>
-      <button class="chip" type="button" data-area="UAESP">UAESP</button>
-    </div>
-    <div class="munis" id="munis" role="group" aria-label="Municipios de la CAR" hidden></div>
-    <div class="munis" id="temas" role="group" aria-label="Temas de la UAESP" hidden></div>
-    <datalist id="listaMunicipios"></datalist>
-    <datalist id="listaTemas"></datalist>
+    <div class="areas" id="areas" role="group" aria-label="Ver pendientes de" hidden></div>
+    <div class="munis" id="subs" role="group" aria-label="Categorías" hidden></div>
+    <datalist id="listaSub"></datalist>
     <form class="add" id="form">
       <input id="nuevoTexto" type="text" placeholder="Escribe un pendiente" aria-label="Nuevo pendiente" autocomplete="off">
       <input id="nuevaFecha" type="date" aria-label="Fecha del pendiente; déjala vacía si no tiene fecha">
@@ -265,9 +265,8 @@ ul { list-style: none; margin: 0; padding: 0; }
       <input id="nuevaHora" type="time" aria-label="Hora de inicio" hidden>
       <input id="nuevaHoraFin" type="time" aria-label="Hora de fin" hidden>
       <select id="nuevaPrioridad" aria-label="Prioridad"><option value="">Sin prioridad</option><option value="alta">🔴 Urgente</option><option value="media">🟡 Importante</option><option value="baja">🟢 Puede esperar</option></select>
-      <input id="nuevoMunicipio" type="text" list="listaMunicipios" placeholder="Municipio" aria-label="Municipio" autocomplete="off">
-      <input id="nuevoTema" type="text" list="listaTemas" placeholder="Tema" aria-label="Tema" autocomplete="off" hidden>
-      <select id="nuevaArea" aria-label="Entidad del pendiente"><option value="CAR">CAR</option><option value="UAESP">UAESP</option><option value="">Sin entidad</option></select>
+      <input id="nuevaSub" type="text" list="listaSub" placeholder="Categoría" aria-label="Categoría" autocomplete="off" hidden>
+      <select id="nuevaArea" aria-label="Entidad del pendiente"><option value="">Sin entidad</option></select>
       <button class="btn solid" type="submit">Agregar</button>
     </form>
     <div id="contenido" class="grupo"></div>
@@ -282,7 +281,7 @@ ul { list-style: none; margin: 0; padding: 0; }
         <button class="mini" id="mesSig" type="button" aria-label="Mes siguiente">›</button>
       </div>
       <div class="cal" id="cal"></div>
-      <p class="leyenda"><span>Punto: pendientes de un tema o municipio</span><span>Anillo: reunión</span><span><b>Rojo:</b> festivo</span></p>
+      <p class="leyenda"><span>Punto: pendientes de una categoría</span><span>Anillo: reunión</span><span><b>Rojo:</b> festivo</span></p>
       <div class="proximas resumen" id="resumenDia"></div>
       <div class="proximas" id="proximas"></div>
     </section>
@@ -290,6 +289,15 @@ ul { list-style: none; margin: 0; padding: 0; }
       <h2 id="notasTitulo">Notas del día</h2>
       <textarea id="notaDia" aria-labelledby="notasTitulo" placeholder="Lo que salga hoy: llamadas, acuerdos, ideas…"></textarea>
       <p class="guardado" id="guardado" aria-live="polite"></p>
+    </section>
+    <section class="tarjeta">
+      <div class="mes-head"><h2 class="normal">Mis entidades</h2></div>
+      <p class="cifras">Organiza tus pendientes por entidad, empresa o proyecto. Cada una puede tener su lista de categorías, como municipios o temas.</p>
+      <details class="mas-colores" id="editarEnt">
+        <summary>Editar entidades y categorías</summary>
+        <div id="entidades"></div>
+        <button class="mini" id="agregarEnt" type="button">+ Agregar entidad</button>
+      </details>
     </section>
     <section class="tarjeta">
       <div class="mes-head"><h2>Colores</h2></div>
@@ -302,17 +310,14 @@ ul { list-style: none; margin: 0; padding: 0; }
         <button class="chip" type="button" data-tema="bosque">Verde y lila</button>
       </div>
       <h3 class="grupo-color">Entidades</h3>
-      <div class="colores">
-        <label><input type="color" id="colCar" value="#9be4d1"> CAR</label>
-        <label><input type="color" id="colUaesp" value="#ffb199"> UAESP</label>
-      </div>
+      <div class="colores" id="coloresEnt"></div>
       <h3 class="grupo-color">Tipos</h3>
       <div class="colores">
         <label><input type="color" id="colEv" value="#fce1d9"> Reuniones y eventos</label>
         <label><input type="color" id="colPend" value="#5f7a80"> Pendientes</label>
       </div>
       <details class="mas-colores" id="masColores">
-        <summary>Más colores: semáforo, municipios y temas</summary>
+        <summary>Más colores: semáforo y categorías</summary>
         <h3>Semáforo</h3>
         <div class="colores">
           <label><input type="color" id="colSemAlta" value="#d1453b"> Urgente</label>
@@ -343,18 +348,31 @@ const mayus = s => s.charAt(0).toUpperCase() + s.slice(1);
 const largo = s => mayus(fmtLargo.format(aFecha(s)).replace(",", ""));
 const fmtHora = s => { const [H, M] = s.split(":").map(Number); return ((H % 12) || 12) + ":" + pad(M) + (H < 12 ? " a. m." : " p. m."); };
 const esEv = t => t.tipo === "evento";
-const BASE_MUNIS = ["Bojacá", "Chocontá", "Fusagasugá", "Guaduas", "La Calera", "La Mesa", "Viotá"];
 const llano = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-const municipios = () => [...new Set([...BASE_MUNIS, ...[...S.items.values()].map(t => t.municipio).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "es"));
-const detectarMunicipio = texto => { const t = " " + llano(texto) + " "; return municipios().find(m => t.includes(" " + llano(m) + " ") || t.includes(" " + llano(m) + ",") || t.includes(" " + llano(m) + ".") || t.includes(" " + llano(m) + ":")) || null; };
 const BASE_TEMAS = ["Cementerio Central", "Protocolo de acceso", "Oficios y documentos", "Convenios IDIPRON", "RenoBo (Contrato 581)", "Servicios funerarios", "Alumbrado público"];
 const CLAVES_TEMA = [["Protocolo de acceso", ["protocolo"]], ["Cementerio Central", ["cementerio central", "elipse", "patrimonio funerario", "encuentro iberoamericano"]],
   ["Convenios IDIPRON", ["idipron"]], ["RenoBo (Contrato 581)", ["renobo", "581"]], ["Oficios y documentos", ["oficio", "radicado", "comunicado", "memorando", "documento"]],
   ["Alumbrado público", ["alumbrado"]], ["Servicios funerarios", ["funerari", "cementerio"]]];
-const temas = () => [...new Set([...BASE_TEMAS, ...[...S.items.values()].map(t => t.tema).filter(Boolean)])];
-const detectarTema = texto => { const t = llano(texto); const r = CLAVES_TEMA.find(([, cs]) => cs.some(c => t.includes(c))); return r ? r[0] : null; };
-const nombreTema = v => { const x = (v || "").trim(); if (!x) return null; return temas().find(m => llano(m) === llano(x)) || x.charAt(0).toUpperCase() + x.slice(1); };
-const nombreMunicipio = v => { const x = (v || "").trim(); if (!x) return null; return municipios().find(m => llano(m) === llano(x)) || x.charAt(0).toUpperCase() + x.slice(1); };
+const ENT_DANIELA = [
+  { nombre: "CAR", color: "#9be4d1", campo: "municipio", etiqueta: "Municipio", opciones: ["Bojacá", "Chocontá", "Fusagasugá", "Guaduas", "La Calera", "La Mesa", "Viotá"] },
+  { nombre: "UAESP", color: "#ffb199", campo: "tema", etiqueta: "Tema", opciones: BASE_TEMAS.slice() }
+];
+let ENT = [];
+const ent = nombre => ENT.find(e => e.nombre === nombre);
+const subDe = t => { const e = ent(t.area); return (e && t[e.campo]) || t.municipio || t.tema || t.sub || null; };
+const opcionesDe = e => !e ? [] : [...new Set([...(e.opciones || []), ...[...S.items.values()].filter(t => t.area === e.nombre).map(subDe).filter(Boolean)])];
+const palabras = x => " " + llano(x).replace(/[^a-z0-9]+/g, " ").trim() + " ";
+const detectarSub = (e, texto) => {
+  if (!e) return null;
+  const t = palabras(texto), op = opcionesDe(e);
+  const directo = op.find(m => t.includes(palabras(m)));
+  if (directo) return directo;
+  const r = CLAVES_TEMA.find(([n, cs]) => op.includes(n) && cs.some(c => t.includes(" " + c) || llano(texto).includes(c)));
+  return r ? r[0] : null;
+};
+const detectarTema = texto => detectarSub(ent("UAESP"), texto);
+const nombreSub = (e, v) => { const x = (v || "").trim(); if (!x) return null; return opcionesDe(e).find(m => llano(m) === llano(x)) || x.charAt(0).toUpperCase() + x.slice(1); };
+const plural = e => !e.etiqueta ? "Categorías" : /[aeiouáéíóú]$/i.test(e.etiqueta) ? e.etiqueta + "s" : e.etiqueta + "es";
 const PRIO = { alta: "Urgente", media: "Importante", baja: "Puede esperar" };
 const rangoPrio = t => ({ alta: 0, media: 1, baja: 2 })[t.prioridad] ?? 3;
 const corto = s => fmtCorto.format(aFecha(s)).replace(/\./g, "").replace(",", "");
@@ -390,7 +408,7 @@ const festivo = s => festivos(+s.slice(0, 4))[s] || "";
 /* Estado */
 const S = { dia: hoyIso(), mes: hoyIso().slice(0, 7), vista: "dia", items: new Map(), notas: new Map(), abiertos: new Set(), cargando: true, recien: null };
 let db = null;
-try { S.area = localStorage.getItem("agenda-area") || ""; S.muni = localStorage.getItem("agenda-muni") || ""; S.tema = localStorage.getItem("agenda-tema") || ""; } catch (e) { S.area = ""; S.muni = ""; S.tema = ""; }
+try { S.area = localStorage.getItem("agenda-area") || ""; S.sub = localStorage.getItem("agenda-sub") || ""; } catch (e) { S.area = ""; S.sub = ""; }
 
 /* Guardado: una escritura a la vez por documento. */
 const colas = {};
@@ -456,6 +474,16 @@ function colorDe(nombre) {
   let n = 0; for (const ch of llano(nombre)) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
   return ABANICO[n % ABANICO.length];
 }
+function etiquetaEnt(nombre) {
+  const e = h("span", { className: "tag ent" }, nombre);
+  e.style.setProperty("--cat", (ent(nombre) || {}).color || "#c9d3d6");
+  return e;
+}
+function opcionesEnt(sel, valor) {
+  sel.replaceChildren(...ENT.map(e => h("option", { value: e.nombre, textContent: e.nombre })), h("option", { value: "", textContent: "Sin entidad" }));
+  if (valor && !ent(valor)) sel.append(h("option", { value: valor, textContent: valor }));
+  sel.value = valor || "";
+}
 function etiquetaCat(nombre) {
   const e = h("span", { className: "tag muni conColor" }, nombre);
   e.style.setProperty("--cat", colorDe(nombre));
@@ -467,7 +495,7 @@ function colorChip(b, nombre) {
 }
 const ordenEstado = { pendiente: 0, hecho: 1, tachado: 2 };
 const ordenar = l => l.sort((a, b) => ordenEstado[a[1].estado] - ordenEstado[b[1].estado] || rangoPrio(a[1]) - rangoPrio(b[1]) || a[1].creado - b[1].creado);
-const todos = () => [...S.items.entries()].filter(([, t]) => (!S.area || t.area === S.area) && (S.area !== "CAR" || !S.muni || t.municipio === S.muni) && (S.area !== "UAESP" || !S.tema || t.tema === S.tema));
+const todos = () => [...S.items.entries()].filter(([, t]) => (!S.area || t.area === S.area) && (!S.area || !S.sub || subDe(t) === S.sub));
 const atrasados = () => ordenar(todos().filter(([, t]) => !esEv(t) && t.fecha && t.fecha < hoyIso() && t.estado === "pendiente"));
 
 function fila(id, t, conFecha) {
@@ -489,7 +517,7 @@ function fila(id, t, conFecha) {
 
   const abierto = S.abiertos.has(id);
   const partes = [];
-  if (t.area && !S.area) partes.push(h("span", { className: "tag " + t.area.toLowerCase() }, t.area));
+  if (t.area && !S.area) partes.push(etiquetaEnt(t.area));
   if (!ev && PRIO[t.prioridad]) {
     const sig = { alta: "media", media: "baja", baja: null };
     const sem = h("button", { className: "sem " + t.prioridad, type: "button", textContent: PRIO[t.prioridad], title: "Cambiar prioridad" });
@@ -497,8 +525,7 @@ function fila(id, t, conFecha) {
     sem.onclick = () => cambiar(id, { prioridad: sig[t.prioridad] });
     partes.unshift(sem);
   }
-  if (t.municipio) partes.push(etiquetaCat(t.municipio));
-  if (t.tema) partes.push(etiquetaCat(t.tema));
+  if (subDe(t)) partes.push(etiquetaCat(subDe(t)));
   if (ev && t.horaFin) partes.push(h("span", {}, "Hasta " + fmtHora(t.horaFin)));
   if (conFecha && t.fecha) partes.push(h("span", { className: t.fecha < hoyIso() && t.estado === "pendiente" ? "tarde" : "" }, corto(t.fecha)));
   const meta = partes.length ? h("div", { className: "meta" }, ...partes) : null;
@@ -525,8 +552,7 @@ function fila(id, t, conFecha) {
     const sin = h("button", { className: "mini", type: "button", textContent: "Sin fecha" });
     sin.onclick = () => { cambiar(id, { fecha: null }); toast("Quedó en Todos los pendientes, sin fecha"); };
     const area = h("select", { id: "area-" + id });
-    [["CAR", "CAR"], ["UAESP", "UAESP"], ["", "Sin entidad"]].forEach(([v, l]) => area.append(h("option", { value: v, textContent: l })));
-    area.value = t.area || ""; area.setAttribute("aria-label", "Entidad"); area.dataset.edit = "1";
+    opcionesEnt(area, t.area || ""); area.setAttribute("aria-label", "Entidad"); area.dataset.edit = "1"; area.hidden = !ENT.length && !t.area;
     area.onchange = () => cambiar(id, { area: area.value || null });
     const tipo = h("select", { id: "tipo-" + id });
     [["tarea", "Pendiente"], ["evento", "Reunión o evento"]].forEach(([v, l]) => tipo.append(h("option", { value: v, textContent: l })));
@@ -539,13 +565,12 @@ function fila(id, t, conFecha) {
     hFin.setAttribute("aria-label", "Hora de fin"); hFin.dataset.edit = "1"; hFin.hidden = !ev;
     hFin.onchange = () => cambiar(id, { horaFin: hFin.value || null });
     sin.hidden = ev;
-    const muni = h("input", { type: "text", value: t.municipio || "", id: "muni-" + id, placeholder: "Municipio" });
-    muni.setAttribute("list", "listaMunicipios"); muni.setAttribute("aria-label", "Municipio"); muni.dataset.edit = "1";
-    muni.onchange = () => cambiar(id, { municipio: nombreMunicipio(muni.value) });
-    muni.hidden = t.area !== "CAR";
-    const tem = h("input", { type: "text", value: t.tema || "", id: "tema-" + id, placeholder: "Tema" });
-    tem.setAttribute("list", "listaTemas"); tem.setAttribute("aria-label", "Tema"); tem.dataset.edit = "1"; tem.hidden = t.area !== "UAESP";
-    tem.onchange = () => cambiar(id, { tema: nombreTema(tem.value) });
+    const eT = ent(t.area);
+    const sub = h("input", { type: "text", value: subDe(t) || "", id: "sub-" + id, placeholder: eT ? eT.etiqueta || "Categoría" : "Categoría" });
+    sub.setAttribute("aria-label", eT ? eT.etiqueta || "Categoría" : "Categoría"); sub.dataset.edit = "1"; sub.hidden = !eT;
+    sub.addEventListener("focus", () => $("listaSub").replaceChildren(...opcionesDe(eT).map(m => h("option", { value: m }))));
+    sub.setAttribute("list", "listaSub");
+    sub.onchange = () => cambiar(id, { [eT.campo]: nombreSub(eT, sub.value) });
     const prio = h("select", { id: "prio-" + id });
     [["", "Sin prioridad"], ["alta", "🔴 Urgente"], ["media", "🟡 Importante"], ["baja", "🟢 Puede esperar"]].forEach(([v, l]) => prio.append(h("option", { value: v, textContent: l })));
     prio.value = t.prioridad || ""; prio.setAttribute("aria-label", "Prioridad"); prio.dataset.edit = "1"; prio.hidden = ev;
@@ -554,7 +579,7 @@ function fila(id, t, conFecha) {
     borrar.onclick = () => { quitarItem(id); toast("Pendiente borrado", () => ponerItem(id, t)); };
     li.append(h("div", { className: "panel" },
       h("label", { htmlFor: "nota-" + id }, "Nota", nota),
-      h("div", { className: "fila" }, tipo, prio, area, muni, tem, fecha, hIni, hFin, manana, sin, borrar)));
+      h("div", { className: "fila" }, tipo, prio, area, sub, fecha, hIni, hFin, manana, sin, borrar)));
   }
   return li;
 }
@@ -620,11 +645,11 @@ function pintarCal() {
       [...new Set(evs.map(colorCat))].slice(0, 2).forEach(c => { const i = h("i", { className: "e" }); i.style.setProperty("--c", c); pts.push(i); });
       b.append(h("span", { className: "puntos" }, ...pts));
       b.append(h("span", { className: "evs" }, ...evs.slice(0, 3).map(t => {
-        const e = h("span", { className: "ev-mini" }, (t.hora ? horaCorta(t.hora) + " " : "") + (t.tema || t.municipio || t.texto));
+        const e = h("span", { className: "ev-mini" }, (t.hora ? horaCorta(t.hora) + " " : "") + (subDe(t) || t.texto));
         e.style.setProperty("--cat", colorCat(t)); return e;
       }), evs.length > 3 ? h("span", { className: "ev-mini mas" }, "+" + (evs.length - 3) + " más") : null));
-      const resumen = [...evs.map(t => (t.hora ? fmtHora(t.hora) + " " : "") + t.texto + (t.tema || t.municipio ? " (" + (t.tema || t.municipio) + ")" : "")),
-        ...pend.map(t => "• " + t.texto + (t.tema || t.municipio ? " (" + (t.tema || t.municipio) + ")" : ""))];
+      const resumen = [...evs.map(t => (t.hora ? fmtHora(t.hora) + " " : "") + t.texto + (subDe(t) ? " (" + subDe(t) + ")" : "")),
+        ...pend.map(t => "• " + t.texto + (subDe(t) ? " (" + subDe(t) + ")" : ""))];
       b.title = (fest ? fest + "\n" : "") + resumen.join("\n");
       b.setAttribute("aria-label", b.getAttribute("aria-label") + `, ${evs.length} reuniones y ${pend.length} pendientes`);
     }
@@ -638,7 +663,7 @@ function pintarCal() {
   $("proximas").replaceChildren(h("h3", {}, "Próximas reuniones"), ...prox.map(t => {
     const b = h("button", { className: "prox", type: "button" },
       h("b", {}, (t.fecha === hoy ? "Hoy" : corto(t.fecha)) + (t.hora ? " · " + fmtHora(t.hora) : "")), h("span", {}, t.texto),
-      h("span", { className: "meta" }, t.area ? h("span", { className: "tag " + t.area.toLowerCase() }, t.area) : null, (t.tema || t.municipio) ? etiquetaCat(t.tema || t.municipio) : null));
+      h("span", { className: "meta" }, t.area ? etiquetaEnt(t.area) : null, subDe(t) ? etiquetaCat(subDe(t)) : null));
     b.onclick = () => irA(t.fecha, "dia");
     return b;
   }));
@@ -650,7 +675,7 @@ function pintarResumen(porDia, porHora) {
   const pend = delDia.filter(t => !esEv(t) && t.estado === "pendiente").sort((a, b) => rangoPrio(a) - rangoPrio(b));
   const hechos = delDia.filter(t => !esEv(t) && t.estado === "hecho");
   const atr = d === hoy ? atrasados().map(([, t]) => t) : [];
-  const etiquetas = t => h("span", { className: "meta" }, t.area ? h("span", { className: "tag " + t.area.toLowerCase() }, t.area) : null, (t.tema || t.municipio) ? etiquetaCat(t.tema || t.municipio) : null);
+  const etiquetas = t => h("span", { className: "meta" }, t.area ? etiquetaEnt(t.area) : null, subDe(t) ? etiquetaCat(subDe(t)) : null);
   const plural = (n, a, b) => n + " " + (n === 1 ? a : b);
   const cifras = [plural(evs.length, "reunión", "reuniones"), plural(pend.length, "pendiente", "pendientes"), plural(hechos.length, "realizado", "realizados")];
   if (atr.length) cifras.push(plural(atr.length, "atrasado", "atrasados"));
@@ -668,8 +693,8 @@ function pintarResumen(porDia, porHora) {
     ...[...filas, nota ? h("p", { className: "res-nota" }, nota.length > 160 ? nota.slice(0, 160) + "…" : nota) : null].filter(Boolean));
 }
 function colorCat(t) {
-  if (t.municipio || t.tema) return colorDe(t.municipio || t.tema);
-  return t.area === "CAR" ? "var(--car)" : t.area === "UAESP" ? "var(--uaesp)" : "var(--muted)";
+  if (subDe(t)) return colorDe(subDe(t));
+  const e = ent(t.area); return e ? e.color : "var(--muted)";
 }
 const horaCorta = s => { const [H, M] = s.split(":").map(Number); return ((H % 12) || 12) + (M ? ":" + pad(M) : "") + (H < 12 ? "a" : "p"); };
 let pendienteDibujo = false;
@@ -687,27 +712,31 @@ function render() {
   $("tabTodos").replaceChildren("Pendientes ", h("span", { className: "n" }, `(${nAbiertos})`));
   $("tabDia").setAttribute("aria-selected", S.vista === "dia");
   $("tabTodos").setAttribute("aria-selected", S.vista === "todos");
-  document.querySelectorAll(".chip[data-area]").forEach(c => c.setAttribute("aria-pressed", c.dataset.area === S.area));
-  const ms = municipios();
-  $("listaMunicipios").replaceChildren(...ms.map(m => h("option", { value: m })));
-  const enUso = [...new Set([...S.items.values()].filter(t => t.area === "CAR" && t.municipio).map(t => t.municipio))].sort((a, b) => a.localeCompare(b, "es"));
-  $("munis").hidden = S.area !== "CAR" || !enUso.length;
-  $("munis").replaceChildren(...["", ...enUso].map(m => {
-    const b = h("button", { className: "chip", type: "button", textContent: m || "Todos los municipios" });
-    b.setAttribute("aria-pressed", m === S.muni);
-    b.onclick = () => { S.muni = m; try { localStorage.setItem("agenda-muni", m); } catch (e) {} render(); };
+  if (S.area && !ent(S.area)) { S.area = ""; S.sub = ""; }
+  $("areas").hidden = !ENT.length;
+  $("areas").replaceChildren(...[{ nombre: "" }, ...ENT].map(e => {
+    const b = h("button", { className: "chip", type: "button", textContent: e.nombre || "Todo" });
+    b.setAttribute("aria-pressed", e.nombre === S.area);
+    if (e.nombre) { b.classList.add("conColor"); b.style.setProperty("--cat", e.color); }
+    b.onclick = () => {
+      S.area = e.nombre; S.sub = ""; if (S.area) $("nuevaArea").value = S.area;
+      try { localStorage.setItem("agenda-area", S.area); localStorage.setItem("agenda-sub", ""); } catch (er) {}
+      render();
+    };
+    return b;
+  }));
+  const eSel = ent(S.area), ops = opcionesDe(eSel);
+  $("subs").hidden = !eSel || !ops.length;
+  $("subs").replaceChildren(...["", ...ops].map(m => {
+    const b = h("button", { className: "chip", type: "button", textContent: m || "Todas" + (eSel && eSel.etiqueta ? " (" + plural(eSel).toLowerCase() + ")" : "") });
+    b.setAttribute("aria-pressed", m === S.sub);
+    b.onclick = () => { S.sub = m; try { localStorage.setItem("agenda-sub", m); } catch (e) {} render(); };
     return colorChip(b, m);
   }));
-  $("nuevoMunicipio").hidden = $("nuevaArea").value !== "CAR";
-  $("nuevoTema").hidden = $("nuevaArea").value !== "UAESP";
-  $("listaTemas").replaceChildren(...temas().map(m => h("option", { value: m })));
-  $("temas").hidden = S.area !== "UAESP";
-  $("temas").replaceChildren(...["", ...temas()].map(m => {
-    const b = h("button", { className: "chip", type: "button", textContent: m || "Todos los temas" });
-    b.setAttribute("aria-pressed", m === S.tema);
-    b.onclick = () => { S.tema = m; try { localStorage.setItem("agenda-tema", m); } catch (e) {} render(); };
-    return colorChip(b, m);
-  }));
+  const valArea = $("nuevaArea").value;
+  opcionesEnt($("nuevaArea"), ent(valArea) ? valArea : (S.area || (ENT[0] || {}).nombre || ""));
+  $("nuevaArea").hidden = !ENT.length;
+  actualizarSubForm();
   const nEv = todos().filter(([, t]) => esEv(t) && t.fecha && t.fecha >= hoyIso() && t.estado !== "tachado").length;
   $("tabEventos").replaceChildren("Reuniones ", h("span", { className: "n" }, `(${nEv})`));
   $("tabEventos").setAttribute("aria-selected", S.vista === "eventos");
@@ -746,12 +775,13 @@ $("tabTodos").onclick = () => { S.vista = "todos"; $("nuevaFecha").value = ""; $
 $("tabHechos").onclick = () => { S.vista = "hechos"; $("nuevaFecha").value = S.dia; $("nuevoTipo").value = "tarea"; $("nuevoTipo").onchange(); render(); };
 $("tabEventos").onclick = () => { S.vista = "eventos"; $("nuevaFecha").value = S.dia; $("nuevoTipo").value = "evento"; $("nuevoTipo").onchange(); render(); };
 function moverMes(n) { const [y, m] = S.mes.split("-").map(Number); S.mes = iso(new Date(y, m - 1 + n, 1)).slice(0, 7); pintarCal(); }
-document.querySelectorAll(".chip[data-area]").forEach(c => c.onclick = () => {
-  S.area = c.dataset.area; S.muni = ""; S.tema = ""; if (S.area) $("nuevaArea").value = S.area;
-  try { localStorage.setItem("agenda-area", S.area); } catch (e) {}
-  render();
-});
-$("nuevaArea").addEventListener("change", () => { $("nuevoMunicipio").hidden = $("nuevaArea").value !== "CAR"; $("nuevoTema").hidden = $("nuevaArea").value !== "UAESP"; });
+function actualizarSubForm() {
+  const e = ent($("nuevaArea").value);
+  $("nuevaSub").hidden = !e;
+  if (e) { $("nuevaSub").placeholder = e.etiqueta || "Categoría"; $("nuevaSub").setAttribute("aria-label", e.etiqueta || "Categoría"); }
+}
+$("nuevaArea").addEventListener("change", actualizarSubForm);
+$("nuevaSub").addEventListener("focus", () => $("listaSub").replaceChildren(...opcionesDe(ent($("nuevaArea").value)).map(m => h("option", { value: m }))));
 $("nuevoTipo").onchange = () => {
   const ev = $("nuevoTipo").value === "evento";
   $("nuevaHora").hidden = $("nuevaHoraFin").hidden = !ev;
@@ -768,11 +798,11 @@ $("form").addEventListener("submit", e => {
   const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const datos = { texto: v, fecha, area: $("nuevaArea").value || null, estado: "pendiente", nota: "", creado: Date.now() };
   if (!ev && $("nuevaPrioridad").value) datos.prioridad = $("nuevaPrioridad").value;
-  if (datos.area === "CAR") datos.municipio = nombreMunicipio($("nuevoMunicipio").value) || (S.area === "CAR" && S.muni) || detectarMunicipio(v);
-  if (datos.area === "UAESP") datos.tema = nombreTema($("nuevoTema").value) || (S.area === "UAESP" && S.tema) || detectarTema(v);
+  const eN = ent(datos.area);
+  if (eN) datos[eN.campo] = nombreSub(eN, $("nuevaSub").value) || (S.area === datos.area && S.sub) || detectarSub(eN, v);
   if (ev) Object.assign(datos, { tipo: "evento", hora: $("nuevaHora").value || null, horaFin: $("nuevaHoraFin").value || null });
   ponerItem(id, datos);
-  $("nuevaHora").value = ""; $("nuevaHoraFin").value = ""; $("nuevaPrioridad").value = ""; $("nuevoMunicipio").value = ""; $("nuevoTema").value = "";
+  $("nuevaHora").value = ""; $("nuevaHoraFin").value = ""; $("nuevaPrioridad").value = ""; $("nuevaSub").value = "";
   inp.value = ""; inp.focus();
   if (!fecha) toast("Guardado sin fecha, en Todos los pendientes");
   else if (S.vista === "dia" && fecha !== S.dia) toast("Guardado para el " + corto(fecha));
@@ -785,9 +815,9 @@ $("quitarEj").onclick = () => {
 };
 
 /* Colores */
-const TEMAS = { coral: { accent: "#3e9f93", car: "#9be4d1", uaesp: "#ffb199", ev: "#fce1d9", pend: "#5f7a80" },
-                bosque: { accent: "#0a6c5a", car: "#bfe3d6", uaesp: "#d9ccf2", ev: "#dbe9f6", pend: "#55706a" } };
-const CAMPOS = { accent: "colAccent", car: "colCar", uaesp: "colUaesp", ev: "colEv", pend: "colPend" };
+const TEMAS = { coral: { accent: "#3e9f93", ev: "#fce1d9", pend: "#5f7a80" },
+                bosque: { accent: "#0a6c5a", ev: "#dbe9f6", pend: "#55706a" } };
+const CAMPOS = { accent: "colAccent", ev: "colEv", pend: "colPend" };
 function luz(hex) {
   const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4));
   return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
@@ -818,16 +848,74 @@ document.querySelectorAll("[data-tema]").forEach(b => b.onclick = () => guardarC
 [["alta", "colSemAlta"], ["media", "colSemMedia"], ["baja", "colSemBaja"]].forEach(([k, idc]) =>
   $(idc).addEventListener("input", e => guardarColores({ ...colores, sem: { ...(colores.sem || {}), [k]: e.target.value } })));
 function pintarColoresCat() {
-  const munis = [...new Set([...S.items.values()].filter(t => t.municipio).map(t => t.municipio))].sort((a, b) => a.localeCompare(b, "es"));
   const grupo = (titulo, nombres) => nombres.length ? [h("h3", {}, titulo), h("div", { className: "colores" }, ...nombres.map(n => {
     const inp = h("input", { type: "color", value: colorDe(n) });
     inp.setAttribute("aria-label", "Color de " + n);
     inp.addEventListener("input", e => guardarColores({ ...colores, cat: { ...(colores.cat || {}), [n]: e.target.value } }));
     return h("label", {}, inp, " " + n);
   }))] : [];
-  $("coloresCat").replaceChildren(...grupo("Municipios (CAR)", munis), ...grupo("Temas (UAESP)", temas()));
+  $("coloresCat").replaceChildren(...ENT.flatMap(e => grupo(plural(e) + " (" + e.nombre + ")", opcionesDe(e))));
 }
 $("masColores").addEventListener("toggle", () => { if ($("masColores").open) pintarColoresCat(); });
+let tEnt;
+function guardarEnt() {
+  clearTimeout(tEnt);
+  tEnt = setTimeout(() => { if (db) db.collection("ajustes").doc("entidades").set({ lista: ENT.map(e => ({ ...e })) }); }, 400);
+  render(); pintarColoresEnt();
+}
+function pintarColoresEnt() {
+  $("coloresEnt").replaceChildren(...ENT.map(e => {
+    const inp = h("input", { type: "color", value: e.color });
+    inp.setAttribute("aria-label", "Color de " + e.nombre);
+    inp.addEventListener("change", ev => { const x = ent(e.nombre); if (x) { x.color = ev.target.value; guardarEnt(); } });
+    return h("label", {}, inp, " " + e.nombre);
+  }));
+  if (!ENT.length) $("coloresEnt").replaceChildren(h("p", { className: "cifras" }, "Aún no tienes entidades."));
+}
+function pintarEntidades() {
+  $("entidades").replaceChildren(...ENT.map((e, i) => {
+    const nombre = h("input", { type: "text", value: e.nombre, placeholder: "Nombre, por ejemplo CAR" });
+    nombre.onchange = () => {
+      e = ENT[i] || e;
+      const nuevo = nombre.value.trim(); if (!nuevo || nuevo === e.nombre || ent(nuevo)) { nombre.value = e.nombre; return; }
+      for (const [id, t] of S.items) if (t.area === e.nombre) cambiar(id, { area: nuevo });
+      if (S.area === e.nombre) S.area = nuevo;
+      e.nombre = nuevo; guardarEnt(); pintarEntidades();
+    };
+    const color = h("input", { type: "color", value: e.color });
+    color.setAttribute("aria-label", "Color");
+    color.onchange = () => { e = ENT[i] || e; e.color = color.value; guardarEnt(); };
+    const etiqueta = h("input", { type: "text", value: e.etiqueta || "", placeholder: "Municipio, tema, proyecto…" });
+    etiqueta.onchange = () => { e = ENT[i] || e; e.etiqueta = etiqueta.value.trim(); guardarEnt(); };
+    const opciones = h("textarea", { value: (e.opciones || []).join("\n"), placeholder: "Una por línea" });
+    opciones.onchange = () => { e = ENT[i] || e; e.opciones = [...new Set(opciones.value.split("\n").map(x => x.trim()).filter(Boolean))]; guardarEnt(); };
+    const borrar = h("button", { className: "mini peligro", type: "button", textContent: "Quitar entidad" });
+    borrar.onclick = () => {
+      if (borrar.dataset.seguro) { ENT.splice(i, 1); guardarEnt(); pintarEntidades(); return; }
+      borrar.dataset.seguro = "1"; borrar.textContent = "¿Seguro? Toca otra vez (sus pendientes no se borran)";
+    };
+    return h("div", { className: "ent-edit" },
+      h("div", { className: "fila-ent" }, color, nombre),
+      h("label", {}, "Nombre de sus categorías", etiqueta),
+      h("label", {}, "Categorías (una por línea)", opciones),
+      borrar);
+  }));
+}
+$("editarEnt").addEventListener("toggle", () => { if ($("editarEnt").open) pintarEntidades(); });
+$("agregarEnt").onclick = () => {
+  let n = "Nueva entidad", k = 2; while (ent(n)) n = "Nueva entidad " + k++;
+  ENT.push({ nombre: n, color: ABANICO[ENT.length % ABANICO.length], campo: "sub", etiqueta: "Categoría", opciones: [] });
+  guardarEnt(); pintarEntidades();
+};
+let entFalta = false;
+function revisarEnt() {
+  if (!entFalta || S.cargando) return;
+  entFalta = false;
+  const usa = [...S.items.values()].some(t => t.area === "CAR" || t.area === "UAESP");
+  ENT = usa ? JSON.parse(JSON.stringify(ENT_DANIELA)) : [];
+  if (usa) guardarEnt(); else { render(); pintarColoresEnt(); }
+}
+pintarColoresEnt();
 $("quitarCat").onclick = () => { guardarColores({ ...colores, cat: {} }); pintarColoresCat(); };
 
 /* Arranque con Firebase */
@@ -857,7 +945,7 @@ const V = "https://www.gstatic.com/firebasejs/10.12.2/";
   A.onAuthStateChanged(auth, u => {
     parar.forEach(f => f()); parar = [];
     $("login").hidden = !!u; $("app").hidden = !u;
-    S.items = new Map(); S.notas = new Map(); S.cargando = !!u; db = null;
+    S.items = new Map(); S.notas = new Map(); S.cargando = !!u; db = null; ENT = []; entFalta = false;
     if (!u) return;
     /* Las escrituras se aplican de inmediato en el dispositivo y se envían cuando hay conexión. */
     const ref = (n, id) => F.doc(fsdb, "users", u.uid, n, id);
@@ -868,8 +956,12 @@ const V = "https://www.gstatic.com/firebasejs/10.12.2/";
     const err = () => { clearTimeout(espera); S.cargando = false; aviso("No pude leer tu agenda. Vuelve a abrirla."); render(); };
     parar.push(F.onSnapshot(F.collection(fsdb, "users", u.uid, "pendientes"), snap => {
       S.items = new Map(snap.docs.map(d => [d.id, d.data()]));
-      clearTimeout(espera); aviso(""); S.cargando = false; render();
+      clearTimeout(espera); aviso(""); S.cargando = false; revisarEnt(); render();
     }, err));
+    parar.push(F.onSnapshot(F.doc(fsdb, "users", u.uid, "ajustes", "entidades"), d => {
+      if (d.exists()) { ENT = (d.data().lista || []).map(e => ({ ...e })); entFalta = false; render(); pintarColoresEnt(); if ($("editarEnt").open && !$("editarEnt").contains(document.activeElement)) pintarEntidades(); }
+      else if (!d.metadata.fromCache) { entFalta = true; revisarEnt(); }
+    }, () => {}));
     parar.push(F.onSnapshot(F.doc(fsdb, "users", u.uid, "ajustes", "colores"), d => {
       if (d.exists()) { aplicarColores(d.data()); try { localStorage.setItem("agenda-colores", JSON.stringify(colores)); } catch (e) {} }
     }, () => {}));

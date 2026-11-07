@@ -82,6 +82,8 @@ final class Api {
                     t.hora = texto(f, "hora");
                     t.prioridad = texto(f, "prioridad");
                     t.municipio = texto(f, "municipio");
+                    if (t.municipio.isEmpty()) t.municipio = texto(f, "tema");
+                    if (t.municipio.isEmpty()) t.municipio = texto(f, "sub");
                     JSONObject c = f.optJSONObject("creado");
                     if (c != null) t.creado = c.has("integerValue") ? Long.parseLong(c.getString("integerValue")) : (long) c.optDouble("doubleValue", 0);
                     lista.add(t);
