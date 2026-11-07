@@ -160,6 +160,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .prox b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .prox span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prox span { max-width: 100%; }
+.prox .meta { padding-left: 0; }
 .dia:hover { background: var(--soft); }
 .dia.fuera { color: var(--muted); opacity: .55; }
 .dia.festivo-d { color: var(--mark); font-weight: 600; }
@@ -612,7 +613,7 @@ function pintarCal() {
   $("proximas").replaceChildren(h("h3", {}, "Próximas reuniones"), ...prox.map(t => {
     const b = h("button", { className: "prox", type: "button" },
       h("b", {}, (t.fecha === hoy ? "Hoy" : corto(t.fecha)) + (t.hora ? " · " + fmtHora(t.hora) : "")), h("span", {}, t.texto),
-      (t.tema || t.municipio) ? etiquetaCat(t.tema || t.municipio) : (t.area ? h("span", { className: "tag " + t.area.toLowerCase() }, t.area) : null));
+      h("span", { className: "meta" }, t.area ? h("span", { className: "tag " + t.area.toLowerCase() }, t.area) : null, (t.tema || t.municipio) ? etiquetaCat(t.tema || t.municipio) : null));
     b.onclick = () => irA(t.fecha, "dia");
     return b;
   }));
