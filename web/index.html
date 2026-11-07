@@ -17,7 +17,7 @@
   --bg: #fbf6f3; --paper: #ffffff; --ink: #1e2a2f; --muted: #5f6b6f; --line: #ecdcd5; --rule: #efd3c9;
   --accent: #3e9f93; --on-accent: #1e2a2f; --soft: #e2f5f0; --mark: #b4472f; --mark-soft: #fce1d9; --mix-ev: 45%; --mix-tag: 60%;
   --sem-r: #d1453b; --sem-a: #d99a12; --sem-v: #3f9a5a;
-  --car: #9be4d1; --uaesp: #ffb199; --ev: #fce1d9;
+  --car: #9be4d1; --uaesp: #ffb199; --ev: #fce1d9; --pend: #5f7a80;
   --display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
   --body: "Figtree", "Segoe UI", system-ui, sans-serif;
 }
@@ -93,6 +93,8 @@ main, aside { display: grid; gap: 18px; min-width: 0; }
 .chip.conColor::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--cat); }
 .mas-colores { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .mas-colores summary { cursor: pointer; font-weight: 600; font-size: .875rem; color: var(--muted); }
+.grupo-color { margin: 14px 0 8px; font: 600 .75rem/1.3 var(--body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.mes-head + .grupo-color { margin-top: 4px; }
 .mas-colores h3 { margin: 12px 0 6px; font: 600 .75rem/1.3 var(--body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .task[data-estado="hecho"] { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); }
 .task[data-estado="tachado"] { background: color-mix(in srgb, var(--muted) 8%, var(--paper)); }
@@ -102,11 +104,12 @@ main, aside { display: grid; gap: 18px; min-width: 0; }
 .grupo { display: grid; gap: 4px; }
 .grupo h2 { margin: 10px 0 2px; font: 600 .8125rem/1.3 var(--body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .grupo.atraso h2 { color: var(--mark); }
+.grupo.eventos h2 { color: color-mix(in srgb, var(--ev) 30%, var(--ink)); }
 ul { list-style: none; margin: 0; padding: 0; }
 .lista { overflow: hidden; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
 .task { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; gap: 2px 6px; align-items: start; padding: 9px 8px 9px 12px; }
 .task + .task { border-top: 1px solid var(--line); }
-.check { width: 26px; height: 26px; margin-top: 3px; padding: 0; border: 2px solid var(--muted); border-radius: 6px; background: transparent; display: grid; place-items: center; }
+.check { width: 26px; height: 26px; margin-top: 3px; padding: 0; border: 2px solid var(--pend); border-radius: 6px; background: transparent; display: grid; place-items: center; }
 .check:hover { border-color: var(--accent); }
 .check svg { width: 20px; height: 20px; fill: none; stroke: var(--on-accent); stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; visibility: hidden; }
 .task[data-estado="hecho"] .check { background: var(--accent); border-color: var(--accent); }
@@ -277,15 +280,23 @@ ul { list-style: none; margin: 0; padding: 0; }
     </section>
     <section class="tarjeta">
       <div class="mes-head"><h2>Colores</h2></div>
+      <h3 class="grupo-color">Apariencia</h3>
       <div class="colores">
         <label><input type="color" id="colAccent" value="#3e9f93"> Botones</label>
-        <label><input type="color" id="colEv" value="#fce1d9"> Reuniones</label>
-        <label><input type="color" id="colCar" value="#9be4d1"> CAR</label>
-        <label><input type="color" id="colUaesp" value="#ffb199"> UAESP</label>
       </div>
       <div class="temas">
         <button class="chip" type="button" data-tema="coral">Coral y menta</button>
         <button class="chip" type="button" data-tema="bosque">Verde y lila</button>
+      </div>
+      <h3 class="grupo-color">Entidades</h3>
+      <div class="colores">
+        <label><input type="color" id="colCar" value="#9be4d1"> CAR</label>
+        <label><input type="color" id="colUaesp" value="#ffb199"> UAESP</label>
+      </div>
+      <h3 class="grupo-color">Tipos</h3>
+      <div class="colores">
+        <label><input type="color" id="colEv" value="#fce1d9"> Reuniones y eventos</label>
+        <label><input type="color" id="colPend" value="#5f7a80"> Pendientes</label>
       </div>
       <details class="mas-colores" id="masColores">
         <summary>Más colores: semáforo, municipios y temas</summary>
@@ -736,9 +747,9 @@ $("quitarEj").onclick = () => {
 };
 
 /* Colores */
-const TEMAS = { coral: { accent: "#3e9f93", car: "#9be4d1", uaesp: "#ffb199", ev: "#fce1d9" },
-                bosque: { accent: "#0a6c5a", car: "#bfe3d6", uaesp: "#d9ccf2", ev: "#dbe9f6" } };
-const CAMPOS = { accent: "colAccent", car: "colCar", uaesp: "colUaesp", ev: "colEv" };
+const TEMAS = { coral: { accent: "#3e9f93", car: "#9be4d1", uaesp: "#ffb199", ev: "#fce1d9", pend: "#5f7a80" },
+                bosque: { accent: "#0a6c5a", car: "#bfe3d6", uaesp: "#d9ccf2", ev: "#dbe9f6", pend: "#55706a" } };
+const CAMPOS = { accent: "colAccent", car: "colCar", uaesp: "colUaesp", ev: "colEv", pend: "colPend" };
 function luz(hex) {
   const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4));
   return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
