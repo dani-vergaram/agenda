@@ -278,7 +278,7 @@ ul { list-style: none; margin: 0; padding: 0; }
           <label><input type="color" id="colSemBaja" value="#3f9a5a"> Puede esperar</label>
         </div>
         <div id="coloresCat"></div>
-        <button class="mini" id="quitarCat" type="button">Quitar colores de municipios y temas</button>
+        <button class="mini" id="quitarCat" type="button">Volver a los colores por defecto</button>
       </details>
     </section>
     <button class="mini salir" id="salir" type="button">Cerrar sesión</button>
@@ -401,14 +401,26 @@ function h(tag, props = {}, ...hijos) {
   for (const k in props) { if (k in e) e[k] = props[k]; else e.setAttribute(k, props[k]); }
   e.append(...hijos.filter(x => x !== null && x !== undefined)); return e;
 }
+const ABANICO = ["#ffb199", "#9be4d1", "#f7c59f", "#3e9f93", "#e8a598", "#b8e0d8", "#f48b74", "#6fcfba", "#8fb3b8", "#fcd3c4", "#2f7d74", "#5f7a80"];
+const CAT_BASE = {
+  "Cementerio Central": "#3e9f93", "Protocolo de acceso": "#f48b74", "Oficios y documentos": "#8fb3b8", "Convenios IDIPRON": "#6fcfba",
+  "RenoBo (Contrato 581)": "#f7c59f", "Servicios funerarios": "#e8a598", "Alumbrado público": "#fcd3c4",
+  "Bojacá": "#b8e0d8", "Chocontá": "#2f7d74", "Fusagasugá": "#ffb199", "Guaduas": "#9be4d1", "La Calera": "#f7c59f", "La Mesa": "#5f7a80", "Viotá": "#e8a598"
+};
+function colorDe(nombre) {
+  const propio = (colores.cat || {})[nombre];
+  if (propio) return propio;
+  if (CAT_BASE[nombre]) return CAT_BASE[nombre];
+  let n = 0; for (const ch of llano(nombre)) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
+  return ABANICO[n % ABANICO.length];
+}
 function etiquetaCat(nombre) {
-  const e = h("span", { className: "tag muni" }, nombre), c = (colores.cat || {})[nombre];
-  if (c) { e.classList.add("conColor"); e.style.setProperty("--cat", c); }
+  const e = h("span", { className: "tag muni conColor" }, nombre);
+  e.style.setProperty("--cat", colorDe(nombre));
   return e;
 }
 function colorChip(b, nombre) {
-  const c = nombre && (colores.cat || {})[nombre];
-  if (c) { b.classList.add("conColor"); b.style.setProperty("--cat", c); }
+  if (nombre) { b.classList.add("conColor"); b.style.setProperty("--cat", colorDe(nombre)); }
   return b;
 }
 const ordenEstado = { pendiente: 0, hecho: 1, tachado: 2 };
@@ -712,7 +724,7 @@ document.querySelectorAll("[data-tema]").forEach(b => b.onclick = () => guardarC
 function pintarColoresCat() {
   const munis = [...new Set([...S.items.values()].filter(t => t.municipio).map(t => t.municipio))].sort((a, b) => a.localeCompare(b, "es"));
   const grupo = (titulo, nombres) => nombres.length ? [h("h3", {}, titulo), h("div", { className: "colores" }, ...nombres.map(n => {
-    const inp = h("input", { type: "color", value: (colores.cat || {})[n] || "#c9d3d6" });
+    const inp = h("input", { type: "color", value: colorDe(n) });
     inp.setAttribute("aria-label", "Color de " + n);
     inp.addEventListener("input", e => guardarColores({ ...colores, cat: { ...(colores.cat || {}), [n]: e.target.value } }));
     return h("label", {}, inp, " " + n);
