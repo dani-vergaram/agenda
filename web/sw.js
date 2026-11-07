@@ -1,5 +1,5 @@
 // Guarda la app para que abra sin conexión. Sube VERSION cuando cambies archivos.
-const VERSION = "agenda-6";
+const VERSION = "agenda-7";
 const BASE = ["./", "index.html", "firebase-config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => c.addAll(BASE)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(
