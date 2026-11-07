@@ -419,11 +419,11 @@ function h(tag, props = {}, ...hijos) {
   for (const k in props) { if (k in e) e[k] = props[k]; else e.setAttribute(k, props[k]); }
   e.append(...hijos.filter(x => x !== null && x !== undefined)); return e;
 }
-const ABANICO = ["#ffb199", "#9be4d1", "#f7c59f", "#3e9f93", "#e8a598", "#b8e0d8", "#f48b74", "#6fcfba", "#8fb3b8", "#fcd3c4", "#2f7d74", "#5f7a80"];
+const ABANICO = ["#7c9cd8", "#e88fb4", "#b39ddb", "#c8a27a", "#8e7cc3", "#f4d35e", "#5fb8a8", "#f08a5d", "#6aa9e0", "#a3c55c", "#c47ab3", "#4f8a8b", "#ffb199", "#88c0d0", "#d4a5a5", "#9be4d1"];
 const CAT_BASE = {
-  "Cementerio Central": "#3e9f93", "Protocolo de acceso": "#f48b74", "Oficios y documentos": "#8fb3b8", "Convenios IDIPRON": "#6fcfba",
-  "RenoBo (Contrato 581)": "#f7c59f", "Servicios funerarios": "#e8a598", "Alumbrado público": "#fcd3c4",
-  "Bojacá": "#b8e0d8", "Chocontá": "#2f7d74", "Fusagasugá": "#ffb199", "Guaduas": "#9be4d1", "La Calera": "#f7c59f", "La Mesa": "#5f7a80", "Viotá": "#e8a598"
+  "Cementerio Central": "#7c9cd8", "Protocolo de acceso": "#e88fb4", "Oficios y documentos": "#9aa5b1", "Convenios IDIPRON": "#b39ddb",
+  "RenoBo (Contrato 581)": "#c8a27a", "Servicios funerarios": "#8e7cc3", "Alumbrado público": "#f4d35e",
+  "Guaduas": "#5fb8a8", "Viotá": "#f08a5d", "La Calera": "#6aa9e0", "Bojacá": "#a3c55c", "Chocontá": "#c47ab3", "Fusagasugá": "#ffb199", "La Mesa": "#4f8a8b"
 };
 function colorDe(nombre) {
   const propio = (colores.cat || {})[nombre];
