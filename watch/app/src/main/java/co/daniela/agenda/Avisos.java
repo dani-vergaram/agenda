@@ -29,7 +29,7 @@ public class Avisos extends JobService {
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
             .setPersisted(true)
             .build();
-        js.schedule(info);
+        try { js.schedule(info); } catch (RuntimeException ignorado) { }
     }
 
     static void cancelar(Context c) {

@@ -84,7 +84,8 @@ public class MainActivity extends Activity {
 
     private EditText campo(String pista, int tipo) {
         EditText e = new EditText(this);
-        e.setHint(pista); e.setInputType(tipo); e.setTextColor(TINTA); e.setSingleLine(true);
+        e.setHint(pista); e.setTextColor(TINTA); e.setSingleLine(true); e.setInputType(tipo);
+        if ((tipo & InputType.TYPE_TEXT_VARIATION_PASSWORD) != 0) e.setTransformationMethod(android.text.method.PasswordTransformationMethod.getInstance());
         return e;
     }
 
