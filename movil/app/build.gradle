@@ -12,8 +12,8 @@ android {
         applicationId "co.daniela.agenda.movil"
         minSdk 26
         targetSdk 34
-        versionCode 4
-        versionName "1.1"
+        versionCode 5
+        versionName "2.0"
         buildConfigField "String", "API_KEY", "\"${valor('apiKey')}\""
         buildConfigField "String", "PROJECT_ID", "\"${valor('projectId')}\""
         buildConfigField "String", "AGENDA_URL", "\"https://dani-vergaram.github.io/agenda/\""
