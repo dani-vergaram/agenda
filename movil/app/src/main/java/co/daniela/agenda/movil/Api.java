@@ -59,38 +59,59 @@ final class Api {
 
     private String ruta(String id) { return raiz() + "/users/" + prefs.getString("uid", "") + "/pendientes/" + id; }
 
-    List<Tarea> listar() throws IOException, JSONException {
-        List<Tarea> lista = new ArrayList<>();
+    List<Tarea> listar() throws IOException, JSONException { return leer(descargar()); }
+
+    /** Descarga todos los documentos de pendientes, con un reintento si falla la red. */
+    JSONArray descargar() throws IOException, JSONException {
+        try { return descargarUnaVez(); }
+        catch (IOException e) {
+            try { Thread.sleep(2500); } catch (InterruptedException ignorado) { }
+            return descargarUnaVez();
+        }
+    }
+
+    private JSONArray descargarUnaVez() throws IOException, JSONException {
+        JSONArray todos = new JSONArray();
         String pagina = "";
         do {
             String url = "https://firestore.googleapis.com/v1/" + raiz() + "/users/" + prefs.getString("uid", "")
                 + "/pendientes?pageSize=300" + (pagina.isEmpty() ? "" : "&pageToken=" + URLEncoder.encode(pagina, "UTF-8"));
             JSONObject r = new JSONObject(pedir("GET", url, null, null, token()));
             JSONArray docs = r.optJSONArray("documents");
-            if (docs != null) {
-                for (int i = 0; i < docs.length(); i++) {
-                    JSONObject d = docs.getJSONObject(i);
-                    JSONObject f = d.getJSONObject("fields");
-                    Tarea t = new Tarea();
-                    String nombre = d.getString("name");
-                    t.id = nombre.substring(nombre.lastIndexOf('/') + 1);
-                    t.texto = texto(f, "texto");
-                    t.fecha = texto(f, "fecha");
-                    t.estado = texto(f, "estado");
-                    t.area = texto(f, "area");
-                    t.tipo = texto(f, "tipo");
-                    t.hora = texto(f, "hora");
-                    t.prioridad = texto(f, "prioridad");
-                    t.municipio = texto(f, "municipio");
-                    if (t.municipio.isEmpty()) t.municipio = texto(f, "tema");
-                    if (t.municipio.isEmpty()) t.municipio = texto(f, "sub");
-                    JSONObject c = f.optJSONObject("creado");
-                    if (c != null) t.creado = c.has("integerValue") ? Long.parseLong(c.getString("integerValue")) : (long) c.optDouble("doubleValue", 0);
-                    lista.add(t);
-                }
-            }
+            if (docs != null) for (int i = 0; i < docs.length(); i++) todos.put(docs.get(i));
             pagina = r.optString("nextPageToken", "");
         } while (!pagina.isEmpty());
+        return todos;
+    }
+
+    static List<Tarea> leer(JSONArray docs) {
+        List<Tarea> lista = new ArrayList<>();
+        for (int i = 0; i < docs.length(); i++) {
+            try {
+                JSONObject d = docs.getJSONObject(i);
+                JSONObject f = d.optJSONObject("fields");
+                if (f == null) continue;
+                Tarea t = new Tarea();
+                String nombre = d.optString("name", "");
+                t.id = nombre.substring(nombre.lastIndexOf('/') + 1);
+                t.texto = texto(f, "texto");
+                t.fecha = texto(f, "fecha");
+                t.estado = texto(f, "estado");
+                t.area = texto(f, "area");
+                t.tipo = texto(f, "tipo");
+                t.hora = texto(f, "hora");
+                t.prioridad = texto(f, "prioridad");
+                t.municipio = texto(f, "municipio");
+                if (t.municipio.isEmpty()) t.municipio = texto(f, "tema");
+                if (t.municipio.isEmpty()) t.municipio = texto(f, "sub");
+                JSONObject c = f.optJSONObject("creado");
+                if (c != null) t.creado = c.has("integerValue") ? Long.parseLong(c.getString("integerValue")) : (long) c.optDouble("doubleValue", 0);
+                if (!t.hora.matches("\\d{1,2}:\\d{2}")) t.hora = "";
+                if (t.hora.length() == 4) t.hora = "0" + t.hora;
+                if (!t.fecha.matches("\\d{4}-\\d{2}-\\d{2}")) t.fecha = "";
+                lista.add(t);
+            } catch (Exception ignorado) { }
+        }
         return lista;
     }
 

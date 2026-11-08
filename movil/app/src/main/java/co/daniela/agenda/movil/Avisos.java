@@ -60,8 +60,10 @@ public class Avisos extends JobService {
         boolean diaNuevo = !hoy.equals(avisados.getString("dia", ""));
         if (diaNuevo) { ed.clear(); ed.putString("dia", hoy); }
 
-        java.util.List<Api.Tarea> lista = api.listar();
-        Widget.pintar(c, lista, null);
+        org.json.JSONArray docs = api.descargar();
+        c.getSharedPreferences(Widget.PREFS, Context.MODE_PRIVATE).edit().putString("cache", docs.toString()).putLong("cacheHora", System.currentTimeMillis()).apply();
+        java.util.List<Api.Tarea> lista = Api.leer(docs);
+        Widget.pintar(c, lista, null, null);
         for (Api.Tarea t : lista) {
             if (!"pendiente".equals(t.estado)) continue;
             String clave = null, titulo = null;

@@ -37,12 +37,26 @@ public class Widget extends AppWidgetProvider {
 
     static void refrescar(Context c, PendingResult fin) {
         new Thread(() -> {
+            SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             try {
                 Api api = new Api(c.getSharedPreferences("sesion", Context.MODE_PRIVATE));
-                if (!api.conSesion()) pintar(c, null, "Abre la app Agenda e inicia sesión.");
-                else pintar(c, api.listar(), null);
+                if (!api.conSesion()) { pintar(c, null, "Abre la app Agenda e inicia sesión.", null); return; }
+                org.json.JSONArray docs = api.descargar();
+                p.edit().putString("cache", docs.toString()).putLong("cacheHora", System.currentTimeMillis()).apply();
+                pintar(c, Api.leer(docs), null, null);
             } catch (Exception e) {
-                pintar(c, null, "Sin conexión. Toca ↻ para reintentar.");
+                String detalle = e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage());
+                if (detalle.length() > 80) detalle = detalle.substring(0, 80);
+                String cache = p.getString("cache", null);
+                try {
+                    if (cache != null) {
+                        long h = p.getLong("cacheHora", 0);
+                        String cuando = java.time.Instant.ofEpochMilli(h).atZone(java.time.ZoneId.systemDefault()).toLocalTime().withSecond(0).withNano(0).toString();
+                        pintar(c, Api.leer(new org.json.JSONArray(cache)), null, "Sin actualizar desde las " + hora(cuando) + " · " + detalle);
+                    } else pintar(c, null, "No pude cargar la agenda. Toca ↻ para reintentar.", detalle);
+                } catch (Exception e2) {
+                    pintar(c, null, "No pude cargar la agenda. Toca ↻ para reintentar.", detalle);
+                }
             } finally {
                 if (fin != null) fin.finish();
             }
@@ -51,9 +65,11 @@ public class Widget extends AppWidgetProvider {
 
     static String hora(String h) {
         if (h == null || h.isEmpty()) return "Todo el día";
-        LocalTime t = LocalTime.parse(h);
-        int x = t.getHour() % 12 == 0 ? 12 : t.getHour() % 12;
-        return x + ":" + String.format("%02d", t.getMinute()) + (t.getHour() < 12 ? " a. m." : " p. m.");
+        try {
+            String[] p = h.split(":");
+            int H = Integer.parseInt(p[0]), Mi = Integer.parseInt(p[1]);
+            return (H % 12 == 0 ? 12 : H % 12) + ":" + String.format("%02d", Mi) + (H < 12 ? " a. m." : " p. m.");
+        } catch (Exception e) { return h; }
     }
 
     private static void con(SpannableStringBuilder sb, String texto, Object... estilos) {
@@ -71,7 +87,7 @@ public class Widget extends AppWidgetProvider {
         return s.substring(0, 1).toUpperCase(ES) + s.substring(1);
     }
 
-    static void pintar(Context c, List<Api.Tarea> todas, String error) {
+    static void pintar(Context c, List<Api.Tarea> todas, String error, String aviso) {
         SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         int dias = p.getInt("dias", 3);
         int opacidad = p.getInt("opacidad", 100);
@@ -141,7 +157,7 @@ public class Widget extends AppWidgetProvider {
             if (!algo && atrasados == 0) con(sb, "Nada pendiente en estos días.", new ForegroundColorSpan(gris));
         }
         v.setTextViewText(R.id.cuerpo, sb);
-        v.setTextViewText(R.id.pie, "Actualizado " + hora(LocalTime.now().withSecond(0).withNano(0).toString()));
+        v.setTextViewText(R.id.pie, aviso != null ? aviso : "Actualizado " + hora(LocalTime.now().withSecond(0).withNano(0).toString()));
         Intent abrir = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         v.setOnClickPendingIntent(R.id.raiz, PendingIntent.getActivity(c, 0, abrir, PendingIntent.FLAG_IMMUTABLE));
         Intent agregar = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("agregar", true);
