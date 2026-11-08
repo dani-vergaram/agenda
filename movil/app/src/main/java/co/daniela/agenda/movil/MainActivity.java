@@ -96,7 +96,10 @@ public class MainActivity extends Activity {
         EditText clave = campo("Contraseña", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         raiz.addView(correo, fila(20));
         raiz.addView(clave, fila(8));
+        TextView error = texto("", 14, Color.rgb(180, 71, 47), false);
+        error.setVisibility(View.GONE);
         raiz.addView(boton("Entrar", true, v -> {
+            error.setVisibility(View.GONE);
             String c = correo.getText().toString().trim(), k = clave.getText().toString();
             fondo.execute(() -> {
                 try {
@@ -105,10 +108,26 @@ public class MainActivity extends Activity {
                     Widget.refrescar(getApplicationContext(), null);
                     runOnUiThread(this::pantallaLista);
                 } catch (Exception e) {
-                    runOnUiThread(() -> Toast.makeText(this, "No pude entrar. Revisa el correo, la contraseña y tu conexión.", Toast.LENGTH_LONG).show());
+                    String msj = motivo(e);
+                    runOnUiThread(() -> { error.setText(msj); error.setVisibility(View.VISIBLE); });
                 }
             });
         }), fila(16));
+        raiz.addView(error, fila(12));
+    }
+
+    static String motivo(Exception e) {
+        String d = String.valueOf(e.getMessage());
+        if (d.contains("INVALID_LOGIN_CREDENTIALS") || d.contains("INVALID_PASSWORD") || d.contains("EMAIL_NOT_FOUND"))
+            return "El correo o la contraseña no coinciden con tu usuario de Firebase. Usa los mismos con los que entras a la agenda en el navegador.";
+        if (d.contains("INVALID_EMAIL")) return "El correo no tiene un formato válido. Revisa que no tenga espacios.";
+        if (d.contains("USER_DISABLED")) return "Este usuario está desactivado en Firebase.";
+        if (d.contains("TOO_MANY_ATTEMPTS")) return "Hubo demasiados intentos. Espera unos minutos y vuelve a intentarlo.";
+        if (d.contains("HTTP 403") || d.contains("API_KEY") || d.contains("PERMISSION_DENIED"))
+            return "Firebase rechazó la conexión de la app (" + d.substring(0, Math.min(d.length(), 160)) + ")";
+        if (e instanceof java.net.UnknownHostException || e instanceof java.net.SocketTimeoutException || e instanceof java.net.ConnectException)
+            return "No hay conexión a internet. Revisa el wifi o los datos y vuelve a intentarlo.";
+        return "No pude entrar. Detalle: " + d.substring(0, Math.min(d.length(), 200));
     }
 
     private void pantallaLista() {

@@ -144,7 +144,7 @@ final class Api {
             in.close();
         }
         c.disconnect();
-        if (estado >= 400) throw new IOException("HTTP " + estado);
+        if (estado >= 400) throw new IOException("HTTP " + estado + " " + b.toString("UTF-8"));
         return b.toString("UTF-8");
     }
 }
