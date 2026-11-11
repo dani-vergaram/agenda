@@ -9,13 +9,15 @@
   try { Object.assign(F, JSON.parse(localStorage.getItem("agenda-filtros") || "{}")); } catch (e) {}
   const guardarF = () => { try { localStorage.setItem("agenda-filtros", JSON.stringify(F)); } catch (e) {} };
   const norm = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const activo = () => !!(F.prio || F.tema || F.q.trim());
+  const activo = () => !!(F.prio || F.tema || F.q.trim() || F.diego);
+  const conDiego = t => !!(t.diego && !t.diego.hablado);
   const pasa = t => {
     if (F.prio === "sin" ? !!t.prioridad : (F.prio && t.prioridad !== F.prio)) return false;
     if (F.tema && (subDe(t) || "") !== F.tema) return false;
+    if (F.diego && !conDiego(t)) return false;
     const q = norm(F.q).trim();
     if (q) {
-      const hay = norm([t.texto, t.nota, subDe(t), t.area, t.correoAsunto, t.correoDe].join(" "));
+      const hay = norm([t.texto, t.nota, subDe(t), t.area, t.correoAsunto, t.correoDe, t.diego && t.diego.pregunta, t.diego && t.diego.linea, ...(t.apuntes || []).map(a => a.texto)].join(" "));
       if (!q.split(/\s+/).every(w => hay.includes(w))) return false;
     }
     return true;
@@ -40,7 +42,11 @@
   const limpiar = el("button", { type: "button", className: "mini", textContent: "Limpiar filtros" });
   const cuenta = el("p", { className: "cuenta" });
   cuenta.setAttribute("aria-live", "polite");
-  const barra = el("div", { className: "filtros" }, buscar, selPrio, selTema, limpiar, cuenta);
+  const chipDiego = el("button", { type: "button", className: "chip" });
+  chipDiego.onclick = () => { F.diego = !F.diego; guardarF(); if (F.diego && S.vista !== "todos" && S.vista !== "tablero") S.vista = "todos"; render(); };
+  const nuevoDiego = el("button", { type: "button", className: "mini", textContent: "+ Tema para Diego" });
+  nuevoDiego.onclick = () => window.__accMenu && window.__accMenu.nuevoDiego();
+  const barra = el("div", { className: "filtros" }, buscar, selPrio, selTema, chipDiego, nuevoDiego, limpiar, cuenta);
   barra.setAttribute("role", "search");
   (document.getElementById("subs") || document.getElementById("form")).after(barra);
 
@@ -48,7 +54,7 @@
   buscar.addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(() => { F.q = buscar.value; guardarF(); render(); }, 200); });
   selPrio.onchange = () => { F.prio = selPrio.value; guardarF(); render(); };
   selTema.onchange = () => { F.tema = selTema.value; guardarF(); render(); };
-  limpiar.onclick = () => { F.prio = ""; F.tema = ""; F.q = ""; buscar.value = ""; selPrio.value = ""; guardarF(); render(); };
+  limpiar.onclick = () => { F.prio = ""; F.tema = ""; F.q = ""; F.diego = false; buscar.value = ""; selPrio.value = ""; guardarF(); render(); };
 
   function pintarTemas() {
     const grupos = (typeof ENT !== "undefined" ? ENT : []).filter(e => !S.area || e.nombre === S.area)
@@ -93,7 +99,8 @@
         kpi(abiertos.filter(t => t.prioridad === "media").length, "Importantes abiertos", "a"),
         kpi(abiertos.filter(t => t.fecha && t.fecha < hoy).length, "Atrasados"),
         kpi(hechos.length, "Atendidos en total", "v"),
-        kpi(hechosMes, "Atendidos este mes", "v"))));
+        kpi(hechosMes, "Atendidos este mes", "v"),
+        kpi(abiertos.filter(conDiego).length, "Para hablar con Diego"))));
 
     // Por mes de origen (fecha del correo, o la fecha del pendiente)
     const meses = {};
@@ -162,6 +169,10 @@
       cuenta.hidden = true;
     }
     limpiar.hidden = !activo();
+    const nD = [...S.items.values()].filter(t => t.estado !== "tachado" && conDiego(t)).length;
+    chipDiego.textContent = "🗣️ Hablar con Diego (" + nD + ")";
+    chipDiego.setAttribute("aria-pressed", !!F.diego);
+    if (window.__decorar) window.__decorar();
     tab.setAttribute("aria-selected", S.vista === "tablero");
   };
   render();
@@ -174,7 +185,7 @@
   if (!contenido) return;
 
   const css = document.createElement("style");
-  css.textContent = "\n  #contenido li.task { -webkit-touch-callout: none; }\n  #contenido li.task.presionando { transform: scale(.985); transition: transform .35s ease; background: var(--soft); border-radius: 12px; }\n  dialog.acciones { width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto auto 12px; padding: 0; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); color: var(--ink); box-shadow: 0 12px 40px rgba(0,0,0,.25); overflow: auto; }\n  @media (min-width: 700px) { dialog.acciones { margin: auto; } }\n  dialog.acciones::backdrop { background: rgba(20, 28, 31, .45); }\n  .acc-cab { padding: 16px 18px 10px; border-bottom: 1px solid var(--line); }\n  .acc-cab b { display: block; font-size: 1rem; line-height: 1.3; }\n  .acc-cab small { display: block; margin-top: 4px; color: var(--muted); font-size: .75rem; line-height: 1.35; }\n  .acc-lista { display: grid; padding: 6px; }\n  .acc-lista button { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }\n  .acc-lista button:hover, .acc-lista button:focus-visible { background: var(--soft); outline: none; }\n  .acc-lista button .ic { width: 22px; text-align: center; font-size: 1.05rem; }\n  .acc-lista button.peligro { color: var(--sem-r); }\n  .acc-form { display: grid; gap: 10px; padding: 14px 18px 18px; }\n  .acc-form label { display: grid; gap: 4px; color: var(--muted); font-size: .8125rem; font-weight: 600; }\n  .acc-form input, .acc-form select, .acc-form textarea { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-weight: 400; }\n  .acc-form textarea { min-height: 70px; resize: vertical; }\n  .acc-fila { display: flex; flex-wrap: wrap; gap: 8px; }\n  .acc-fila > * { flex: 1 1 140px; }\n  .acc-rapidas { display: flex; flex-wrap: wrap; gap: 8px; }\n  .acc-pie { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }\n  .acc-aviso { margin: 0; color: var(--ink); font-size: .9375rem; line-height: 1.4; }";
+  css.textContent = "\n  #contenido li.task { -webkit-touch-callout: none; }\n  #contenido li.task.presionando { transform: scale(.985); transition: transform .35s ease; background: var(--soft); border-radius: 12px; }\n  dialog.acciones { width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto auto 12px; padding: 0; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); color: var(--ink); box-shadow: 0 12px 40px rgba(0,0,0,.25); overflow: auto; }\n  @media (min-width: 700px) { dialog.acciones { margin: auto; } }\n  dialog.acciones::backdrop { background: rgba(20, 28, 31, .45); }\n  .acc-cab { padding: 16px 18px 10px; border-bottom: 1px solid var(--line); }\n  .acc-cab b { display: block; font-size: 1rem; line-height: 1.3; }\n  .acc-cab small { display: block; margin-top: 4px; color: var(--muted); font-size: .75rem; line-height: 1.35; }\n  .acc-lista { display: grid; padding: 6px; }\n  .acc-lista button { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }\n  .acc-lista button:hover, .acc-lista button:focus-visible { background: var(--soft); outline: none; }\n  .acc-lista button .ic { width: 22px; text-align: center; font-size: 1.05rem; }\n  .acc-lista button.peligro { color: var(--sem-r); }\n  .acc-form { display: grid; gap: 10px; padding: 14px 18px 18px; }\n  .acc-form label { display: grid; gap: 4px; color: var(--muted); font-size: .8125rem; font-weight: 600; }\n  .acc-form input, .acc-form select, .acc-form textarea { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-weight: 400; }\n  .acc-form textarea { min-height: 70px; resize: vertical; }\n  .acc-fila { display: flex; flex-wrap: wrap; gap: 8px; }\n  .acc-fila > * { flex: 1 1 140px; }\n  .acc-rapidas { display: flex; flex-wrap: wrap; gap: 8px; }\n  .acc-pie { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }\n  .acc-aviso { margin: 0; color: var(--ink); font-size: .9375rem; line-height: 1.4; }\n  .marca-extra { min-height: 24px; padding: 0 9px; border: 1px solid var(--accent); border-radius: 99px; background: var(--soft); color: var(--ink); font: inherit; font-size: .6875rem; font-weight: 700; cursor: pointer; }\n  .marca-extra.hecho { border-color: var(--sem-v); }\n  .acc-tit { margin: 0; font-size: .9375rem; }\n  .acc-check { display: flex !important; align-items: center; gap: 8px; color: var(--ink) !important; }\n  .acc-check input { min-height: 0 !important; width: 18px; height: 18px; }\n  .apuntes { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; }\n  .apunte { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }\n  .apunte small { color: var(--muted); font-size: .6875rem; }\n  .apunte p { margin: 2px 0 0; white-space: pre-wrap; font-size: .875rem; }\n  .acc-vacio { margin: 0; color: var(--muted); font-size: .8125rem; }";
   document.head.append(css);
 
   const el = (tag, props = {}, ...hijos) => { const e = document.createElement(tag); Object.assign(e, props); e.append(...hijos.filter(x => x != null)); return e; };
@@ -201,6 +212,8 @@
       btn("✏️", "Editar", () => editar(id)),
       btn("📅", "Mover de fecha", () => mover(id)),
       !ev ? btn("🚦", "Cambiar prioridad", () => prioridad(id)) : null,
+      btn("📝", "Mis apuntes" + ((t.apuntes || []).length ? " (" + t.apuntes.length + ")" : ""), () => apuntes(id)),
+      btn("🗣️", t.diego ? (t.diego.hablado ? "Hablado con Diego: ver línea" : "Hablarlo con Diego (marcado)") : "Hablarlo con Diego", () => diego(id)),
       btn(hecho ? "↩️" : "✅", hecho ? "Volver a pendiente" : (ev ? "Marcar como realizada" : "Marcar como atendido"), () => {
         cambiar(id, { estado: hecho ? "pendiente" : "hecho", hechoEn: hecho ? null : Date.now() }); cerrar(); }),
       btn("🗑️", "Eliminar", () => eliminar(id), "peligro"),
@@ -286,6 +299,99 @@
       el("div", { className: "acc-pie" }, no, si)));
     no.focus();
   }
+
+  const hora = ms => new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(ms));
+
+  function apuntes(id) {
+    const t = S.items.get(id); if (!t) return;
+    const lista = (t.apuntes || []).slice().sort((a, b) => b.t - a.t);
+    const caja = el("textarea", { rows: 3, placeholder: "Qué hiciste, qué falta, a quién llamaste, decisiones…" });
+    const guardar = el("button", { type: "button", className: "btn solid", textContent: "Guardar apunte" });
+    guardar.onclick = () => {
+      const v = caja.value.trim(); if (!v) { caja.focus(); return; }
+      cambiar(id, { apuntes: [...(t.apuntes || []), { t: Date.now(), texto: v }] }); apuntes(id);
+    };
+    const volver = el("button", { type: "button", className: "btn", textContent: "Volver" }); volver.onclick = () => menu(id);
+    const items = lista.map(a => {
+      const x = el("button", { type: "button", className: "mini", textContent: "Borrar" });
+      x.onclick = () => { cambiar(id, { apuntes: (t.apuntes || []).filter(b => b.t !== a.t) }); apuntes(id); };
+      return el("li", { className: "apunte" }, el("div", {}, el("small", { textContent: hora(a.t) }), el("p", { textContent: a.texto })), x);
+    });
+    dlg.replaceChildren(cabecera(t), el("div", { className: "acc-form" },
+      el("h3", { className: "acc-tit", textContent: "📝 Mis apuntes de trabajo" }),
+      el("label", {}, "Nuevo apunte", caja),
+      el("div", { className: "acc-pie" }, volver, guardar),
+      items.length ? el("ul", { className: "apuntes" }, ...items) : el("p", { className: "acc-vacio", textContent: "Aún no tienes apuntes en este pendiente. Son solo para ti." })));
+    if (!dlg.open) dlg.showModal();
+    caja.focus();
+  }
+
+  function diego(id) {
+    const t = S.items.get(id); if (!t) return;
+    const d = t.diego || {};
+    const preg = el("textarea", { rows: 3, value: d.pregunta || "", placeholder: "Qué necesito que Diego me defina o apruebe…" });
+    const hablado = el("input", { type: "checkbox", checked: !!d.hablado });
+    const linea = el("textarea", { rows: 3, value: d.linea || "", placeholder: "Qué dijo Diego, qué línea dio…" });
+    const labLinea = el("label", {}, "Línea que dio Diego", linea);
+    const ver = () => { labLinea.hidden = !hablado.checked; };
+    hablado.onchange = ver; ver();
+    const guardar = el("button", { type: "button", className: "btn solid", textContent: "Guardar" });
+    guardar.onclick = () => {
+      const nuevo = { pregunta: preg.value.trim(), hablado: hablado.checked, linea: linea.value.trim(), marcado: d.marcado || Date.now(), habladoEn: hablado.checked ? (d.habladoEn || Date.now()) : null };
+      cambiar(id, { diego: nuevo }); cerrar();
+    };
+    const quitar = el("button", { type: "button", className: "btn", textContent: "Quitar de la lista" });
+    quitar.onclick = () => { cambiar(id, { diego: null }); cerrar(); };
+    const volver = el("button", { type: "button", className: "btn", textContent: "Volver" }); volver.onclick = () => menu(id);
+    dlg.replaceChildren(cabecera(t), el("div", { className: "acc-form" },
+      el("h3", { className: "acc-tit", textContent: "🗣️ Hablarlo con Diego" }),
+      el("label", {}, "Qué le voy a plantear", preg),
+      el("label", { className: "acc-check" }, hablado, "Ya lo hablé con Diego"),
+      labLinea,
+      el("div", { className: "acc-pie" }, volver, t.diego ? quitar : null, guardar)));
+    if (!dlg.open) dlg.showModal();
+    preg.focus();
+  }
+
+  function nuevoDiego() {
+    const texto = el("input", { type: "text", placeholder: "Tema, por ejemplo: alcance del oficio a Montesacro" });
+    const preg = el("textarea", { rows: 3, placeholder: "Qué necesito que Diego me defina o apruebe…" });
+    const crear = el("button", { type: "button", className: "btn solid", textContent: "Agregar" });
+    crear.onclick = () => {
+      const v = texto.value.trim(); if (!v) { texto.focus(); return; }
+      const id = "d" + Date.now().toString(36);
+      ponerItem(id, { texto: v, fecha: hoyIso(), estado: "pendiente", nota: "", creado: Date.now(), area: ent("UAESP") ? "UAESP" : (S.area || null), municipio: null, tema: null, prioridad: null,
+        diego: { pregunta: preg.value.trim(), hablado: false, linea: "", marcado: Date.now(), habladoEn: null } });
+      cerrar();
+    };
+    const no = el("button", { type: "button", className: "btn", textContent: "Cancelar" }); no.onclick = cerrar;
+    dlg.replaceChildren(el("div", { className: "acc-cab" }, el("b", { textContent: "🗣️ Nuevo tema para hablar con Diego" }), el("small", { textContent: "Queda como pendiente de la UAESP marcado para Diego." })),
+      el("div", { className: "acc-form" }, el("label", {}, "Tema", texto), el("label", {}, "Qué le voy a plantear", preg), el("div", { className: "acc-pie" }, no, crear)));
+    if (!dlg.open) dlg.showModal();
+    texto.focus();
+  }
+
+  window.__accMenu = { menu, apuntes, diego, nuevoDiego };
+  window.__decorar = () => {
+    document.querySelectorAll("#contenido li.task").forEach(li => {
+      const id = idDe(li), t = id && S.items.get(id); if (!t) return;
+      li.querySelectorAll(".marca-extra").forEach(x => x.remove());
+      const marcas = [];
+      if (t.diego) {
+        const b = el("button", { type: "button", className: "marca-extra" + (t.diego.hablado ? " hecho" : ""), textContent: t.diego.hablado ? "✅ Diego dio línea" : "🗣️ Hablar con Diego" });
+        b.title = t.diego.pregunta || ""; b.onclick = e => { e.stopPropagation(); diego(id); }; marcas.push(b);
+      }
+      if ((t.apuntes || []).length) {
+        const b = el("button", { type: "button", className: "marca-extra", textContent: "📝 " + t.apuntes.length });
+        b.title = "Mis apuntes"; b.onclick = e => { e.stopPropagation(); apuntes(id); }; marcas.push(b);
+      }
+      if (!marcas.length) return;
+      let meta = li.querySelector(".meta");
+      if (!meta) { meta = el("div", { className: "meta" }); const c = li.querySelector(".cuerpo"); if (!c) return; const tx = c.querySelector(".texto"); tx ? tx.after(meta) : c.prepend(meta); }
+      meta.append(...marcas);
+    });
+  };
+  window.__decorar();
 
   /* Detección del toque sostenido (y clic derecho en computador) */
   let timer = null, x0 = 0, y0 = 0, liAct = null, abrioMenu = false;
