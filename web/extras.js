@@ -385,9 +385,6 @@
         com.title = "Ver o editar el comentario para Diego";
         com.onclick = e => { e.stopPropagation(); diego(id); };
         const c = li.querySelector(".cuerpo"); if (c) c.append(com);
-      } else if (!esEv(t) && t.estado === "pendiente" && (!t.area || t.area === "UAESP")) {
-        const b = el("button", { type: "button", className: "marca-extra suave", textContent: "🗣️ + Diego" });
-        b.title = "Agregar un comentario para hablar con Diego"; b.onclick = e => { e.stopPropagation(); diego(id); }; marcas.push(b);
       }
       const ap = (t.apuntes || []).slice().sort((a, b) => b.t - a.t);
       if (ap.length) {
@@ -396,9 +393,6 @@
           ap.length > 3 ? el("span", { className: "ap mas", textContent: "+" + (ap.length - 3) + " apuntes más" }) : null);
         caja.onclick = e => { e.stopPropagation(); apuntes(id); };
         const c = li.querySelector(".cuerpo"); if (c) c.append(caja);
-      } else if (!esEv(t) && t.estado === "pendiente") {
-        const b = el("button", { type: "button", className: "marca-extra suave", textContent: "📝 + apunte" });
-        b.title = "Agregar un apunte personal"; b.onclick = e => { e.stopPropagation(); apuntes(id); }; marcas.push(b);
       }
       if (!marcas.length) return;
       let meta = li.querySelector(".meta");
