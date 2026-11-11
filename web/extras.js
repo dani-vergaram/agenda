@@ -314,3 +314,30 @@
     const id = idDe(li); if (id) { cancelar(); menu(id); }
   });
 })();
+
+/* ---------- Botón Buscar visible arriba ---------- */
+(() => {
+  const barra = document.querySelector(".filtros");
+  const campo = barra && barra.querySelector("input[type=search]");
+  if (!campo) return;
+  const css = document.createElement("style");
+  css.textContent = ".filtros .lupa { position: relative; flex: 1 1 100%; display: flex; }\n.filtros .lupa::before { content: \"🔍\"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: .95rem; pointer-events: none; }\n.filtros .lupa input[type=search] { flex: 1 1 auto; padding-left: 38px; min-height: 44px; border: 2px solid var(--accent); background: var(--soft); font-weight: 500; }\n.filtros .rotulo { flex: 1 1 100%; margin: 0; color: var(--ink); font-size: .8125rem; font-weight: 700; letter-spacing: .02em; }\n#btnBuscar { font-weight: 700; }";
+  document.head.append(css);
+  const lupa = document.createElement("div"); lupa.className = "lupa";
+  campo.replaceWith(lupa); lupa.append(campo);
+  campo.placeholder = "Palabra clave: oficio, Bojacá, Diego…";
+  const rotulo = document.createElement("p"); rotulo.className = "rotulo"; rotulo.textContent = "Buscar y filtrar";
+  barra.prepend(rotulo);
+  const ir = () => { barra.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => campo.focus(), 250); };
+  const nav = document.querySelector("header .nav");
+  if (nav) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn"; b.id = "btnBuscar"; b.textContent = "🔍 Buscar";
+    b.setAttribute("aria-label", "Buscar por palabra clave");
+    b.onclick = ir; nav.append(b);
+  }
+  document.addEventListener("keydown", e => {
+    const t = e.target, escribiendo = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    if (e.key === "/" && !escribiendo) { e.preventDefault(); ir(); }
+  });
+})();
