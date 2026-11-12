@@ -116,10 +116,40 @@ public class Widget extends AppWidgetProvider {
         if (error != null) {
             con(sb, error, new ForegroundColorSpan(gris));
         } else {
+            boolean verPrio = p.getBoolean("prioridades", true);
+            List<Api.Tarea> prio = new ArrayList<>();
             int atrasados = 0;
-            for (Api.Tarea t : todas)
-                if (!"evento".equals(t.tipo) && "pendiente".equals(t.estado) && !t.fecha.isEmpty() && t.fecha.compareTo(hoy) < 0) atrasados++;
-            if (atrasados > 0) con(sb, atrasados + (atrasados == 1 ? " pendiente atrasado\n" : " pendientes atrasados\n"), new StyleSpan(Typeface.BOLD), new ForegroundColorSpan(rojo));
+            for (Api.Tarea t : todas) {
+                if ("evento".equals(t.tipo) || !"pendiente".equals(t.estado)) continue;
+                boolean esPrio = "alta".equals(t.prioridad) || "media".equals(t.prioridad);
+                if (verPrio && esPrio) prio.add(t);
+                else if (!t.fecha.isEmpty() && t.fecha.compareTo(hoy) < 0) atrasados++;
+            }
+            if (!prio.isEmpty()) {
+                prio.sort((a, b) -> {
+                    int r = Integer.compare(rango(a.prioridad), rango(b.prioridad));
+                    if (r != 0) return r;
+                    String fa = a.fecha.isEmpty() ? "9999" : a.fecha, fb = b.fecha.isEmpty() ? "9999" : b.fecha;
+                    return fa.compareTo(fb);
+                });
+                con(sb, "URGENTES E IMPORTANTES\n", new StyleSpan(Typeface.BOLD), new ForegroundColorSpan(gris), new RelativeSizeSpan(0.82f));
+                int lim = 8, n = 0;
+                for (Api.Tarea t : prio) {
+                    if (n++ == lim) { con(sb, "+" + (prio.size() - lim) + " más\n", new ForegroundColorSpan(gris)); break; }
+                    con(sb, "● ", new ForegroundColorSpan("alta".equals(t.prioridad) ? rojo : ambar));
+                    con(sb, t.texto, new ForegroundColorSpan(tinta));
+                    String cuando;
+                    if (t.fecha.isEmpty()) cuando = "sin fecha";
+                    else if (t.fecha.equals(hoy)) cuando = "hoy";
+                    else {
+                        LocalDate d = LocalDate.parse(t.fecha);
+                        cuando = (t.fecha.compareTo(hoy) < 0 ? "atrasado · " : "") + d.format(DateTimeFormatter.ofPattern("EEE d MMM", ES)).replace(".", "");
+                    }
+                    con(sb, "  " + cuando, new ForegroundColorSpan(t.fecha.compareTo(hoy) < 0 && !t.fecha.isEmpty() ? rojo : gris), new RelativeSizeSpan(0.9f));
+                    sb.append("\n");
+                }
+            }
+            if (atrasados > 0) con(sb, (sb.length() > 0 ? "\n" : "") + atrasados + (atrasados == 1 ? " pendiente atrasado más\n" : " pendientes atrasados más\n"), new StyleSpan(Typeface.BOLD), new ForegroundColorSpan(rojo));
             boolean algo = false;
             for (int k = 0; k < dias; k++) {
                 LocalDate dia = hoyF.plusDays(k);
@@ -128,7 +158,7 @@ public class Widget extends AppWidgetProvider {
                 for (Api.Tarea t : todas) {
                     if (!f.equals(t.fecha)) continue;
                     if ("evento".equals(t.tipo)) { if (!"tachado".equals(t.estado)) evs.add(t); }
-                    else if ("pendiente".equals(t.estado)) pend.add(t);
+                    else if ("pendiente".equals(t.estado) && !(verPrio && ("alta".equals(t.prioridad) || "media".equals(t.prioridad)))) pend.add(t);
                 }
                 if (evs.isEmpty() && pend.isEmpty() && k > 0) continue;
                 algo = true;
@@ -154,7 +184,7 @@ public class Widget extends AppWidgetProvider {
                     sb.append("\n");
                 }
             }
-            if (!algo && atrasados == 0) con(sb, "Nada pendiente en estos días.", new ForegroundColorSpan(gris));
+            if (!algo && atrasados == 0 && prio.isEmpty()) con(sb, "Nada pendiente en estos días.", new ForegroundColorSpan(gris));
         }
         v.setTextViewText(R.id.cuerpo, sb);
         v.setTextViewText(R.id.pie, aviso != null ? aviso : "Actualizado " + hora(LocalTime.now().withSecond(0).withNano(0).toString()));

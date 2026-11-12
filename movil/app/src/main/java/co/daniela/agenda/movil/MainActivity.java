@@ -248,6 +248,12 @@ public class MainActivity extends Activity {
         }
         raiz.addView(dias, fila(4));
 
+        android.widget.CheckBox prio = new android.widget.CheckBox(this);
+        prio.setText("Mostrar arriba todos los urgentes e importantes");
+        prio.setTextColor(TINTA); prio.setTextSize(15);
+        prio.setChecked(p.getBoolean("prioridades", true));
+        prio.setOnCheckedChangeListener((b, sel) -> { p.edit().putBoolean("prioridades", sel).apply(); Widget.refrescar(getApplicationContext(), null); });
+        raiz.addView(prio, fila(16));
         raiz.addView(texto("Fondo", 16, TINTA, true), fila(20));
         RadioGroup tono = new RadioGroup(this);
         tono.setOrientation(RadioGroup.HORIZONTAL);
