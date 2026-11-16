@@ -44,6 +44,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.7"
+      - name: Firma desde los secretos
+        env:
+          FIRMA_JKS: ${{ secrets.FIRMA_JKS }}
+          FIRMA_CLAVE: ${{ secrets.FIRMA_CLAVE }}
+          FIRMA_ALIAS: ${{ secrets.FIRMA_ALIAS }}
+        run: |
+          if [ -z "$FIRMA_JKS" ]; then echo "Sin secretos: se usa la firma del repositorio"; exit 0; fi
+          printf '%s' "$FIRMA_JKS" | tr -d ' \n\r' | base64 -d > firma.nueva
+          if [ -f firma.jks ] && ! cmp -s firma.jks firma.nueva; then echo "::error::El secreto FIRMA_JKS no coincide con la firma actual"; exit 1; fi
+          mv firma.nueva firma.jks
+          printf 'storePassword=%s\nkeyAlias=%s\n' "$FIRMA_CLAVE" "$FIRMA_ALIAS" > firma.properties
+          keytool -list -keystore firma.jks -storepass "$FIRMA_CLAVE" -alias "$FIRMA_ALIAS" > /dev/null
+          echo "Firma tomada de los secretos"
       - run: gradle -p watch assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
@@ -60,6 +73,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.7"
+      - name: Firma desde los secretos
+        env:
+          FIRMA_JKS: ${{ secrets.FIRMA_JKS }}
+          FIRMA_CLAVE: ${{ secrets.FIRMA_CLAVE }}
+          FIRMA_ALIAS: ${{ secrets.FIRMA_ALIAS }}
+        run: |
+          if [ -z "$FIRMA_JKS" ]; then echo "Sin secretos: se usa la firma del repositorio"; exit 0; fi
+          printf '%s' "$FIRMA_JKS" | tr -d ' \n\r' | base64 -d > firma.nueva
+          if [ -f firma.jks ] && ! cmp -s firma.jks firma.nueva; then echo "::error::El secreto FIRMA_JKS no coincide con la firma actual"; exit 1; fi
+          mv firma.nueva firma.jks
+          printf 'storePassword=%s\nkeyAlias=%s\n' "$FIRMA_CLAVE" "$FIRMA_ALIAS" > firma.properties
+          keytool -list -keystore firma.jks -storepass "$FIRMA_CLAVE" -alias "$FIRMA_ALIAS" > /dev/null
+          echo "Firma tomada de los secretos"
       - run: gradle -p movil assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
