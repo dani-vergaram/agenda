@@ -1,7 +1,11 @@
 package co.daniela.agenda;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -29,6 +33,14 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -48,6 +60,8 @@ public class MainActivity extends Activity {
     private static final int ROJO = 0xFFFF8A7F, AMARILLO = 0xFFF2C14E, VERDE = 0xFF7FD39A;
 
     private static final int LISTA = 0, DETALLE = 1, NUEVO = 2, ENTRAR = 3;
+    private static final String URL_APK = "https://dani-vergaram.github.io/agenda/agenda-reloj.apk";
+    private static final String ACCION_INSTALAR = "co.daniela.agenda.INSTALAR";
     private static final Locale ES = new Locale("es", "CO");
     private static final DateTimeFormatter DIA_LARGO = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", ES);
     private static final DateTimeFormatter DIA_CORTO = DateTimeFormatter.ofPattern("d MMM", ES);
@@ -102,6 +116,21 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (vista == DETALLE || vista == NUEVO) volver(); else super.onBackPressed();
+    }
+
+    /** Respuesta del sistema al pedirle instalar una versión nueva. */
+    @Override protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        if (!ACCION_INSTALAR.equals(i.getAction())) return;
+        int estado = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+        if (estado == PackageInstaller.STATUS_SUCCESS) return;
+        try {
+            Intent confirmar = i.getParcelableExtra(Intent.EXTRA_INTENT);
+            if (estado != PackageInstaller.STATUS_PENDING_USER_ACTION || confirmar == null) throw new IllegalStateException();
+            startActivity(confirmar); // el reloj pide confirmar la instalación
+        } catch (RuntimeException e) {
+            avisoLargo("El reloj no permitió instalar. Usa Bugjaeger");
+        }
     }
 
     // ---------- Piezas de diseño ----------
@@ -194,6 +223,8 @@ public class MainActivity extends Activity {
     }
 
     private void aviso(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
+
+    private void avisoLargo(String s) { Toast.makeText(this, s, Toast.LENGTH_LONG).show(); }
 
     private static int colorArea(String area) {
         return "CAR".equals(area) ? MENTA : "UAESP".equals(area) ? DURAZNO : GRIS;
@@ -366,7 +397,8 @@ public class MainActivity extends Activity {
         }
 
         raiz.addView(contorno("Actualizar", GRIS, v -> { aviso("Actualizando…"); cargar(); }), ancho(18));
-        raiz.addView(cerrarSesion(), justo(2));
+        raiz.addView(version(), justo(2));
+        raiz.addView(cerrarSesion(), justo(0));
 
         if (posicion >= 0) {
             int y = posicion;
@@ -543,6 +575,72 @@ public class MainActivity extends Activity {
         if (ultimas == null) { pintarMensaje("Cargando…"); cargar(); return; }
         pintar();
         scroll.requestFocus();
+    }
+
+    // ---------- Actualización de la app desde el propio reloj ----------
+
+    private static String textoVersion() { return "Versión " + BuildConfig.VERSION_NAME + " · Buscar nueva"; }
+
+    private TextView version() {
+        TextView t = centrado(textoVersion(), 12, GRIS);
+        t.setPadding(dp(16), dp(12), dp(16), dp(8));
+        t.setOnClickListener(v -> buscarVersion(t));
+        return t;
+    }
+
+    /** Descarga la APK publicada y, si es más nueva que la instalada, le pide al reloj instalarla. */
+    private void buscarVersion(TextView boton) {
+        boton.setText("Buscando…");
+        fondo.execute(() -> {
+            try {
+                File apk = new File(getCacheDir(), "agenda-reloj.apk");
+                descargar(URL_APK + "?t=" + System.currentTimeMillis(), apk);
+                PackageInfo info = getPackageManager().getPackageArchiveInfo(apk.getPath(), 0);
+                if (info == null || !getPackageName().equals(info.packageName)) throw new IOException("APK no válida");
+                if (info.getLongVersionCode() <= BuildConfig.VERSION_CODE) {
+                    runOnUiThread(() -> { boton.setText(textoVersion()); aviso("Ya tienes la última versión"); });
+                    return;
+                }
+                instalar(apk);
+                runOnUiThread(() -> boton.setText("Instalando…"));
+            } catch (Exception e) {
+                runOnUiThread(() -> { boton.setText(textoVersion()); avisoLargo("No se pudo actualizar. Revisa la conexión"); });
+            }
+        });
+    }
+
+    private static void descargar(String url, File destino) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(15000);
+        c.setReadTimeout(30000);
+        try {
+            if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
+            try (InputStream in = c.getInputStream(); OutputStream o = new FileOutputStream(destino)) { copiar(in, o); }
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private static void copiar(InputStream in, OutputStream o) throws IOException {
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) > 0) o.write(buf, 0, n);
+    }
+
+    private void instalar(File apk) throws IOException {
+        PackageInstaller instalador = getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        p.setAppPackageName(getPackageName());
+        if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+        try (PackageInstaller.Session s = instalador.openSession(instalador.createSession(p))) {
+            try (InputStream in = new FileInputStream(apk); OutputStream o = s.openWrite("agenda", 0, apk.length())) {
+                copiar(in, o);
+                s.fsync(o);
+            }
+            Intent aviso = new Intent(this, MainActivity.class).setAction(ACCION_INSTALAR);
+            PendingIntent respuesta = PendingIntent.getActivity(this, 1, aviso, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+            s.commit(respuesta.getIntentSender());
+        }
     }
 
     private interface Accion { void correr() throws Exception; }
