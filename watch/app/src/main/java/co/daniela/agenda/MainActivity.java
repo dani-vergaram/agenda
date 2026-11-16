@@ -44,9 +44,13 @@ import java.net.URL;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,12 +63,14 @@ public class MainActivity extends Activity {
     private static final int TARJETA = 0xFF1B2529, OSCURO = 0xFF1E2A2F;
     private static final int ROJO = 0xFFFF8A7F, AMARILLO = 0xFFF2C14E, VERDE = 0xFF7FD39A;
 
-    private static final int LISTA = 0, DETALLE = 1, NUEVO = 2, ENTRAR = 3;
+    private static final int LISTA = 0, DETALLE = 1, NUEVO = 2, ENTRAR = 3, CALENDARIO = 4;
     private static final String URL_APK = "https://dani-vergaram.github.io/agenda/agenda-reloj.apk";
     private static final String ACCION_INSTALAR = "co.daniela.agenda.INSTALAR";
     private static final Locale ES = new Locale("es", "CO");
     private static final DateTimeFormatter DIA_LARGO = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", ES);
     private static final DateTimeFormatter DIA_CORTO = DateTimeFormatter.ofPattern("d MMM", ES);
+    private static final DateTimeFormatter DIA_SEMANA = DateTimeFormatter.ofPattern("EEE d MMM", ES);
+    private static final DateTimeFormatter MES = DateTimeFormatter.ofPattern("MMMM yyyy", ES);
 
     private final ExecutorService fondo = Executors.newSingleThreadExecutor();
     private Api api;
@@ -73,6 +79,9 @@ public class MainActivity extends Activity {
     private List<Api.Tarea> ultimas; // última lista leída; null mientras no haya cargado
     private int vista = LISTA;
     private int posicion = -1; // desplazamiento de la lista para restaurarlo al volver
+    private int origen = LISTA; // pantalla desde la que se abrió el detalle
+    private YearMonth mes;
+    private LocalDate diaSel;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -115,7 +124,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() { fondo.shutdown(); super.onDestroy(); }
 
     @Override public void onBackPressed() {
-        if (vista == DETALLE || vista == NUEVO) volver(); else super.onBackPressed();
+        if (vista == DETALLE || vista == NUEVO || vista == CALENDARIO) volver(); else super.onBackPressed();
     }
 
     /** Respuesta del sistema al pedirle instalar una versión nueva. */
@@ -250,6 +259,29 @@ public class MainActivity extends Activity {
         try { return LocalDate.parse(iso).format(DIA_CORTO).replace(".", ""); } catch (RuntimeException e) { return iso; }
     }
 
+    private static String mayuscula(String s) { return s.isEmpty() ? s : s.substring(0, 1).toUpperCase(ES) + s.substring(1); }
+
+    /** "Hoy", "Mañana" o "Mié 18 nov". */
+    private static String diaRelativo(String iso, LocalDate hoy) {
+        try {
+            LocalDate d = LocalDate.parse(iso);
+            if (d.equals(hoy)) return "Hoy";
+            if (d.equals(hoy.plusDays(1))) return "Mañana";
+            return mayuscula(d.format(DIA_SEMANA).replace(".", ""));
+        } catch (RuntimeException e) { return iso; }
+    }
+
+    private static final Comparator<Api.Tarea> POR_HORA = (a, b) -> {
+        int f = a.fecha.compareTo(b.fecha);
+        return f != 0 ? f : a.hora.compareTo(b.hora);
+    };
+
+    private static final Comparator<Api.Tarea> POR_URGENCIA = (a, b) -> {
+        int p = Integer.compare(peso(a.estado), peso(b.estado));
+        if (p == 0) p = Integer.compare(rango(a.prioridad), rango(b.prioridad));
+        return p != 0 ? p : Long.compare(a.creado, b.creado);
+    };
+
     private static String falta(LocalTime ahora, LocalTime inicio) {
         long min = (Duration.between(ahora, inicio).getSeconds() + 59) / 60;
         if (min < 60) return "en " + Math.max(min, 1) + " min";
@@ -291,7 +323,7 @@ public class MainActivity extends Activity {
         fondo.execute(() -> {
             try {
                 List<Api.Tarea> todas = api.listar();
-                runOnUiThread(() -> { ultimas = todas; if (vista == LISTA) pintar(); });
+                runOnUiThread(() -> { ultimas = todas; if (vista == LISTA) pintar(); else if (vista == CALENDARIO) pantallaCalendario(); });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     if (vista != LISTA) return;
@@ -339,30 +371,30 @@ public class MainActivity extends Activity {
         LocalDate dia = LocalDate.now();
         String hoy = dia.toString();
         LocalTime ahora = LocalTime.now();
-        List<Api.Tarea> atrasadas = new ArrayList<>(), deHoy = new ArrayList<>(), eventos = new ArrayList<>();
+        List<Api.Tarea> atrasadas = new ArrayList<>(), deHoy = new ArrayList<>(), eventos = new ArrayList<>(), futuras = new ArrayList<>();
         for (Api.Tarea t : ultimas) {
             if (t.fecha.isEmpty()) continue;
             if ("evento".equals(t.tipo)) {
-                if (t.fecha.equals(hoy) && !"tachado".equals(t.estado)) eventos.add(t);
+                if ("tachado".equals(t.estado)) continue;
+                if (t.fecha.equals(hoy)) eventos.add(t);
+                else if (t.fecha.compareTo(hoy) > 0) futuras.add(t);
                 continue;
             }
             if (t.fecha.equals(hoy)) deHoy.add(t);
             else if (t.fecha.compareTo(hoy) < 0 && "pendiente".equals(t.estado)) atrasadas.add(t);
         }
-        eventos.sort((a, b) -> a.hora.compareTo(b.hora));
+        eventos.sort(POR_HORA);
+        futuras.sort(POR_HORA);
         atrasadas.sort((a, b) -> a.fecha.compareTo(b.fecha));
-        deHoy.sort((a, b) -> {
-            int p = Integer.compare(peso(a.estado), peso(b.estado));
-            if (p == 0) p = Integer.compare(rango(a.prioridad), rango(b.prioridad));
-            return p != 0 ? p : Long.compare(a.creado, b.creado);
-        });
+        deHoy.sort(POR_URGENCIA);
 
-        // Próxima reunión: la primera de hoy que no ha terminado.
+        // Próxima reunión: la primera de hoy que no ha terminado; si no queda ninguna, la siguiente de otro día.
         Api.Tarea proxima = null;
         for (Api.Tarea e : eventos) {
             LocalTime i = hora(e.hora);
             if (i != null && fin(e, i).isAfter(ahora)) { proxima = e; break; }
         }
+        if (proxima == null && !futuras.isEmpty()) proxima = futuras.remove(0);
         int porHacer = atrasadas.size();
         for (Api.Tarea t : deHoy) if ("pendiente".equals(t.estado)) porHacer++;
 
@@ -374,15 +406,18 @@ public class MainActivity extends Activity {
         if (!eventos.isEmpty()) resumen += " · " + eventos.size() + (eventos.size() == 1 ? " reunión" : " reuniones");
         raiz.addView(centrado(resumen, 12, GRIS));
 
-        if (proxima != null) raiz.addView(tarjetaProxima(proxima, ahora), ancho(10));
+        if (proxima != null) raiz.addView(tarjetaProxima(proxima, ahora, dia), ancho(10));
 
         TextView mas = pastilla("+  Nuevo", TARJETA, MENTA, v -> pantallaNuevo());
         mas.setMinHeight(dp(40));
         raiz.addView(mas, justo(10));
+        TextView cal = pastilla("Calendario", TARJETA, ROSA, v -> abrirCalendario());
+        cal.setMinHeight(dp(40));
+        raiz.addView(cal, justo(6));
 
-        if (eventos.size() > (proxima == null ? 0 : 1)) {
+        if (eventos.size() > (eventos.contains(proxima) ? 1 : 0)) {
             raiz.addView(seccion("Reuniones de hoy", ROSA), ancho(14));
-            for (Api.Tarea e : eventos) if (e != proxima) raiz.addView(tarjetaReunion(e, ahora), ancho(6));
+            for (Api.Tarea e : eventos) if (e != proxima) raiz.addView(tarjetaReunion(e, ""), ancho(6));
         }
         if (!atrasadas.isEmpty()) {
             raiz.addView(seccion("Atrasados · " + atrasadas.size(), ROJO), ancho(14));
@@ -394,6 +429,14 @@ public class MainActivity extends Activity {
         }
         if (deHoy.isEmpty() && atrasadas.isEmpty() && eventos.isEmpty()) {
             raiz.addView(centrado("Nada para hoy", 14, GRIS), ancho(16));
+        }
+
+        if (!futuras.isEmpty()) {
+            raiz.addView(seccion("Próximas reuniones", ROSA), ancho(14));
+            for (int i = 0; i < futuras.size() && i < 4; i++) {
+                Api.Tarea e = futuras.get(i);
+                raiz.addView(tarjetaReunion(e, diaRelativo(e.fecha, dia) + " · "), ancho(6));
+            }
         }
 
         raiz.addView(contorno("Actualizar", GRIS, v -> { aviso("Actualizando…"); cargar(); }), ancho(18));
@@ -416,17 +459,19 @@ public class MainActivity extends Activity {
     }
 
     /** Bloque destacado con la siguiente reunión del día y cuánto falta. */
-    private View tarjetaProxima(Api.Tarea e, LocalTime ahora) {
+    private View tarjetaProxima(Api.Tarea e, LocalTime ahora, LocalDate hoy) {
         LocalTime inicio = hora(e.hora);
-        boolean enCurso = !inicio.isAfter(ahora);
+        boolean esHoy = e.fecha.equals(hoy.toString());
+        boolean enCurso = esHoy && inicio != null && !inicio.isAfter(ahora);
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
         c.setGravity(Gravity.CENTER_HORIZONTAL);
         c.setBackground(conOnda(redondo(ROSA, 22), 22));
         c.setPadding(dp(14), dp(10), dp(14), dp(12));
         c.addView(seccion(enCurso ? "En curso" : "Próxima reunión", 0xB31E2A2F));
-        c.addView(negrita(centrado(e.hora, 26, OSCURO)));
-        String cuando = enCurso ? "hasta las " + fin(e, inicio).toString().substring(0, 5) : falta(ahora, inicio);
+        c.addView(negrita(centrado(e.hora.isEmpty() ? "Todo el día" : e.hora, e.hora.isEmpty() ? 18 : 26, OSCURO)));
+        String cuando = enCurso ? "hasta las " + fin(e, inicio).toString().substring(0, 5)
+            : esHoy && inicio != null ? falta(ahora, inicio) : diaRelativo(e.fecha, hoy);
         c.addView(negrita(centrado(cuando, 12, 0xFFB4472F)));
         TextView titulo = centrado(e.texto, 14, OSCURO);
         titulo.setMaxLines(2);
@@ -437,15 +482,16 @@ public class MainActivity extends Activity {
         return c;
     }
 
-    private View tarjetaReunion(Api.Tarea e, LocalTime ahora) {
+    private View tarjetaReunion(Api.Tarea e, String prefijo) {
         LocalTime inicio = hora(e.hora);
-        boolean paso = inicio != null && !fin(e, inicio).isAfter(ahora);
+        int dias = e.fecha.compareTo(LocalDate.now().toString());
+        boolean paso = dias < 0 || (dias == 0 && inicio != null && !fin(e, inicio).isAfter(LocalTime.now()));
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
         c.setBackground(tarjeta(ROSA));
         c.setPadding(dp(16), dp(8), dp(12), dp(8));
         String h = e.hora.isEmpty() ? "Todo el día" : e.hora + (e.horaFin.isEmpty() ? "" : " – " + e.horaFin);
-        c.addView(negrita(texto(h + (e.area.isEmpty() ? "" : " · " + e.area), 11, ROSA)));
+        c.addView(negrita(texto(prefijo + h + (e.area.isEmpty() ? "" : " · " + e.area), 11, ROSA)));
         TextView titulo = texto(e.texto, 14, TINTA);
         titulo.setMaxLines(2);
         titulo.setEllipsize(TextUtils.TruncateAt.END);
@@ -509,6 +555,7 @@ public class MainActivity extends Activity {
     /** Detalle de un pendiente o reunión: nota completa, horario y acciones. */
     private void detalle(Api.Tarea t) {
         if (vista == LISTA) posicion = scroll.getScrollY();
+        if (vista == LISTA || vista == CALENDARIO) origen = vista;
         limpiar(DETALLE);
         scroll.scrollTo(0, 0);
         boolean evento = "evento".equals(t.tipo);
@@ -555,6 +602,117 @@ public class MainActivity extends Activity {
         raiz.addView(contorno("Volver", GRIS, v -> volver()), ancho(evento ? 12 : 6));
     }
 
+    // ---------- Calendario ----------
+
+    private void abrirCalendario() {
+        if (vista == LISTA) posicion = scroll.getScrollY();
+        mes = YearMonth.now();
+        diaSel = LocalDate.now();
+        scroll.scrollTo(0, 0);
+        pantallaCalendario();
+    }
+
+    private void cambiarMes(int n) {
+        mes = mes.plusMonths(n);
+        diaSel = mes.equals(YearMonth.now()) ? LocalDate.now() : mes.atDay(1);
+        pantallaCalendario();
+    }
+
+    private GradientDrawable ovalo(int color) {
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(color);
+        return g;
+    }
+
+    /** Mes con puntos en los días con reuniones (rosa) o pendientes (menta), y la lista del día elegido. */
+    private void pantallaCalendario() {
+        limpiar(CALENDARIO);
+        LocalDate hoy = LocalDate.now();
+        Map<String, Integer> marcas = new HashMap<>();
+        for (Api.Tarea t : ultimas) {
+            boolean evento = "evento".equals(t.tipo);
+            if (t.fecha.isEmpty() || "tachado".equals(t.estado) || (!evento && !"pendiente".equals(t.estado))) continue;
+            marcas.merge(t.fecha, evento ? 1 : 2, (a, b) -> a | b);
+        }
+
+        LinearLayout cab = new LinearLayout(this);
+        cab.setGravity(Gravity.CENTER);
+        cab.addView(flecha("‹", v -> cambiarMes(-1)), new LinearLayout.LayoutParams(dp(40), dp(40)));
+        cab.addView(negrita(centrado(mayuscula(mes.format(MES)), 13, TINTA)), new LinearLayout.LayoutParams(dp(100), LinearLayout.LayoutParams.WRAP_CONTENT));
+        cab.addView(flecha("›", v -> cambiarMes(1)), new LinearLayout.LayoutParams(dp(40), dp(40)));
+        raiz.addView(cab, justo(4));
+
+        LinearLayout semana = new LinearLayout(this);
+        for (String s : new String[] { "L", "M", "M", "J", "V", "S", "D" }) {
+            semana.addView(centrado(s, 10, GRIS), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        }
+        raiz.addView(semana, ancho(2));
+
+        LocalDate d = mes.atDay(1);
+        d = d.minusDays(d.getDayOfWeek().getValue() - 1); // la semana empieza en lunes
+        while (!d.isAfter(mes.atEndOfMonth())) {
+            LinearLayout fila = new LinearLayout(this);
+            for (int i = 0; i < 7; i++, d = d.plusDays(1)) {
+                fila.addView(celda(d, hoy, marcas.get(d.toString())), new LinearLayout.LayoutParams(0, dp(30), 1));
+            }
+            raiz.addView(fila, ancho(0));
+        }
+
+        String clave = diaSel.toString();
+        List<Api.Tarea> reuniones = new ArrayList<>(), tareas = new ArrayList<>();
+        for (Api.Tarea t : ultimas) {
+            if (!clave.equals(t.fecha)) continue;
+            if (!"evento".equals(t.tipo)) tareas.add(t);
+            else if (!"tachado".equals(t.estado)) reuniones.add(t);
+        }
+        reuniones.sort(POR_HORA);
+        tareas.sort(POR_URGENCIA);
+        raiz.addView(seccion(diaRelativo(clave, hoy), GRIS), ancho(10));
+        for (Api.Tarea e : reuniones) raiz.addView(tarjetaReunion(e, ""), ancho(6));
+        for (Api.Tarea t : tareas) raiz.addView(tarjetaTarea(t, false), ancho(6));
+        if (reuniones.isEmpty() && tareas.isEmpty()) raiz.addView(centrado("Sin nada este día", 13, GRIS), ancho(8));
+        raiz.addView(contorno("Volver", GRIS, v -> volver()), ancho(12));
+    }
+
+    private TextView flecha(String s, View.OnClickListener l) {
+        TextView t = negrita(centrado(s, 22, MENTA));
+        t.setBackground(conOnda(redondo(Color.TRANSPARENT, 20), 20));
+        t.setOnClickListener(l);
+        return t;
+    }
+
+    private View celda(LocalDate d, LocalDate hoy, Integer marca) {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setGravity(Gravity.CENTER);
+        if (!YearMonth.from(d).equals(mes)) return c; // día de otro mes: celda vacía
+        boolean elegido = d.equals(diaSel), esHoy = d.equals(hoy);
+        TextView n = centrado(String.valueOf(d.getDayOfMonth()), 12, elegido ? OSCURO : esHoy ? MENTA : TINTA);
+        if (elegido || esHoy) negrita(n);
+        if (elegido) n.setBackground(ovalo(MENTA));
+        c.addView(n, new LinearLayout.LayoutParams(dp(22), dp(22)));
+        LinearLayout puntos = new LinearLayout(this);
+        puntos.setGravity(Gravity.CENTER);
+        if (marca != null) {
+            if ((marca & 1) != 0) puntos.addView(punto(ROSA));
+            if ((marca & 2) != 0) puntos.addView(punto(MENTA));
+        }
+        c.addView(puntos, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(5)));
+        c.setOnClickListener(v -> { diaSel = d; pantallaCalendario(); });
+        return c;
+    }
+
+    private View punto(int color) {
+        View p = new View(this);
+        p.setBackground(ovalo(color));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(4), dp(4));
+        lp.leftMargin = dp(1);
+        lp.rightMargin = dp(1);
+        p.setLayoutParams(lp);
+        return p;
+    }
+
     private void pantallaNuevo() {
         if (vista == LISTA) posicion = scroll.getScrollY();
         limpiar(NUEVO);
@@ -573,7 +731,7 @@ public class MainActivity extends Activity {
 
     private void volver() {
         if (ultimas == null) { pintarMensaje("Cargando…"); cargar(); return; }
-        pintar();
+        if (vista == DETALLE && origen == CALENDARIO) pantallaCalendario(); else pintar();
         scroll.requestFocus();
     }
 
@@ -650,7 +808,11 @@ public class MainActivity extends Activity {
         fondo.execute(() -> {
             try {
                 a.correr();
-                runOnUiThread(() -> { vista = LISTA; cargar(); });
+                runOnUiThread(() -> {
+                    if (vista == DETALLE && origen == CALENDARIO) vista = CALENDARIO;
+                    else if (vista != CALENDARIO) vista = LISTA;
+                    cargar();
+                });
             } catch (Exception e) {
                 runOnUiThread(() -> aviso("No se guardó. Revisa la conexión"));
             }
