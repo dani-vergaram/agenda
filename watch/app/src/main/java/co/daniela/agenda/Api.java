@@ -15,12 +15,25 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-/** Conexión con Firebase por su API web, sin librerías adicionales. */
+/** Conexión con Firebase por su API web, sin librerías adicionales. Guarda una copia en el reloj para usarlo sin conexión. */
 final class Api {
     static final class Tarea {
         String id, texto, fecha, estado, area, tipo, hora, horaFin, prioridad, municipio, nota;
         long creado;
     }
+
+    /** Entidad de la agenda web (CAR, UAESP…) con su color "#rrggbb". */
+    static final class Entidad { String nombre, color; }
+
+    /** Respuesta de error del servidor (distinta de no tener conexión). */
+    static final class Http extends IOException {
+        final int codigo;
+        Http(int codigo) { super("HTTP " + codigo); this.codigo = codigo; }
+    }
+
+    private interface Cambio { void en(Tarea t); }
+
+    private static final Object COLA = new Object();
 
     private final SharedPreferences prefs;
     private String idToken;
@@ -57,13 +70,19 @@ final class Api {
 
     private String raiz() { return "projects/" + BuildConfig.PROJECT_ID + "/databases/(default)/documents"; }
 
-    private String ruta(String id) { return raiz() + "/users/" + prefs.getString("uid", "") + "/pendientes/" + id; }
+    private String usuario() { return raiz() + "/users/" + prefs.getString("uid", ""); }
 
+    private String ruta(String id) { return usuario() + "/pendientes/" + id; }
+
+    // ---------- Lectura ----------
+
+    /** Envía lo que estuviera en cola, lee toda la agenda y la deja guardada en el reloj. */
     List<Tarea> listar() throws IOException, JSONException {
+        sincronizar();
         List<Tarea> lista = new ArrayList<>();
         String pagina = "";
         do {
-            String url = "https://firestore.googleapis.com/v1/" + raiz() + "/users/" + prefs.getString("uid", "")
+            String url = "https://firestore.googleapis.com/v1/" + usuario()
                 + "/pendientes?pageSize=300" + (pagina.isEmpty() ? "" : "&pageToken=" + URLEncoder.encode(pagina, "UTF-8"));
             JSONObject r = new JSONObject(pedir("GET", url, null, null, token()));
             JSONArray docs = r.optJSONArray("documents");
@@ -93,21 +112,63 @@ final class Api {
             }
             pagina = r.optString("nextPageToken", "");
         } while (!pagina.isEmpty());
-        guardar(lista);
+        regrabar(lista);
+        prefs.edit().putLong("cacheHora", System.currentTimeMillis()).apply();
+        try { leerEntidades(); } catch (IOException sinEntidades) { }
         return lista;
     }
 
-    /** Guarda en el reloj la última lista leída, para poder verla sin conexión. */
-    private void guardar(List<Tarea> lista) throws JSONException {
+    private static String texto(JSONObject f, String k) {
+        JSONObject v = f.optJSONObject(k);
+        return v == null ? "" : v.optString("stringValue", "");
+    }
+
+    /** Lee las entidades y sus colores, tal como están configuradas en la agenda web. */
+    private void leerEntidades() throws IOException, JSONException {
+        JSONObject d = new JSONObject(pedir("GET", "https://firestore.googleapis.com/v1/" + usuario() + "/ajustes/entidades", null, null, token()));
+        JSONObject campos = d.optJSONObject("fields");
+        JSONObject lista = campos == null ? null : campos.optJSONObject("lista");
+        JSONObject arreglo = lista == null ? null : lista.optJSONObject("arrayValue");
+        JSONArray valores = arreglo == null ? null : arreglo.optJSONArray("values");
+        JSONArray a = new JSONArray();
+        if (valores != null) {
+            for (int i = 0; i < valores.length(); i++) {
+                JSONObject m = valores.getJSONObject(i).optJSONObject("mapValue");
+                JSONObject f = m == null ? null : m.optJSONObject("fields");
+                if (f != null) a.put(new JSONArray().put(texto(f, "nombre")).put(texto(f, "color")));
+            }
+        }
+        prefs.edit().putString("entidades", a.toString()).apply();
+    }
+
+    /** Entidades guardadas en el reloj (vacío si todavía no se han leído). */
+    List<Entidad> entidades() {
+        List<Entidad> lista = new ArrayList<>();
+        try {
+            JSONArray a = new JSONArray(prefs.getString("entidades", "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                JSONArray f = a.getJSONArray(i);
+                Entidad x = new Entidad();
+                x.nombre = f.getString(0);
+                x.color = f.getString(1);
+                lista.add(x);
+            }
+        } catch (JSONException raro) { }
+        return lista;
+    }
+
+    // ---------- Copia en el reloj ----------
+
+    private void regrabar(List<Tarea> lista) {
         JSONArray a = new JSONArray();
         for (Tarea t : lista) {
             a.put(new JSONArray().put(t.id).put(t.texto).put(t.fecha).put(t.estado).put(t.area).put(t.tipo)
                 .put(t.hora).put(t.horaFin).put(t.prioridad).put(t.municipio).put(t.nota).put(t.creado));
         }
-        prefs.edit().putString("cache", a.toString()).putLong("cacheHora", System.currentTimeMillis()).apply();
+        prefs.edit().putString("cache", a.toString()).apply();
     }
 
-    /** Última lista guardada en el reloj, o null si todavía no hay ninguna. */
+    /** Última lista guardada en el reloj, con los cambios hechos sin conexión; null si todavía no hay ninguna. */
     List<Tarea> guardada() {
         String s = prefs.getString("cache", null);
         if (s == null) return null;
@@ -137,36 +198,102 @@ final class Api {
         }
     }
 
-    /** Momento (en milisegundos) en que se guardó la última lista. */
+    /** Momento (en milisegundos) de la última lectura completa. */
     long horaGuardada() { return prefs.getLong("cacheHora", 0); }
 
-    private static String texto(JSONObject f, String k) {
-        JSONObject v = f.optJSONObject(k);
-        return v == null ? "" : v.optString("stringValue", "");
+    // ---------- Cambios ----------
+    // Devuelven false cuando no había conexión: el cambio queda en el reloj y se envía solo después.
+
+    boolean cambiarEstado(String id, String estado) throws IOException, JSONException {
+        JSONObject cuando = "pendiente".equals(estado) ? new JSONObject().put("nullValue", JSONObject.NULL) : entero(System.currentTimeMillis());
+        JSONObject campos = new JSONObject().put("estado", cadena(estado)).put("hechoEn", cuando);
+        return enviar(actualizar(id, campos, "estado", "hechoEn"), id, t -> t.estado = estado);
+    }
+
+    boolean mover(String id, String fecha) throws IOException, JSONException {
+        return enviar(actualizar(id, new JSONObject().put("fecha", cadena(fecha)), "fecha"), id, t -> t.fecha = fecha);
+    }
+
+    boolean crear(String texto, String fecha, String area) throws IOException, JSONException {
+        long ahora = System.currentTimeMillis();
+        Tarea t = new Tarea();
+        t.id = "r" + Long.toString(ahora, 36);
+        t.texto = texto; t.fecha = fecha; t.estado = "pendiente"; t.area = area; t.creado = ahora;
+        t.tipo = ""; t.hora = ""; t.horaFin = ""; t.prioridad = ""; t.municipio = ""; t.nota = "";
+        JSONObject campos = new JSONObject()
+            .put("texto", cadena(texto)).put("fecha", cadena(fecha)).put("estado", cadena("pendiente")).put("nota", cadena(""))
+            .put("creado", entero(ahora));
+        if (!area.isEmpty()) campos.put("area", cadena(area));
+        boolean enviado = enviar(new JSONObject().put("update", new JSONObject().put("name", ruta(t.id)).put("fields", campos)), null, null);
+        List<Tarea> lista = guardada();
+        if (lista != null) { lista.add(t); regrabar(lista); }
+        return enviado;
     }
 
     private static JSONObject cadena(String s) throws JSONException { return new JSONObject().put("stringValue", s); }
 
-    void cambiarEstado(String id, String estado) throws IOException, JSONException {
-        JSONObject w = new JSONObject()
-            .put("update", new JSONObject().put("name", ruta(id)).put("fields", new JSONObject().put("estado", cadena(estado))))
-            .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("estado")))
+    private static JSONObject entero(long n) throws JSONException { return new JSONObject().put("integerValue", Long.toString(n)); }
+
+    private JSONObject actualizar(String id, JSONObject campos, String... mascara) throws JSONException {
+        JSONArray m = new JSONArray();
+        for (String s : mascara) m.put(s);
+        return new JSONObject()
+            .put("update", new JSONObject().put("name", ruta(id)).put("fields", campos))
+            .put("updateMask", new JSONObject().put("fieldPaths", m))
             .put("currentDocument", new JSONObject().put("exists", true));
-        commit(w);
     }
 
-    void crear(String texto, String fecha) throws IOException, JSONException {
-        long ahora = System.currentTimeMillis();
-        String id = "r" + Long.toString(ahora, 36);
-        JSONObject campos = new JSONObject()
-            .put("texto", cadena(texto)).put("fecha", cadena(fecha)).put("estado", cadena("pendiente")).put("nota", cadena(""))
-            .put("creado", new JSONObject().put("integerValue", Long.toString(ahora)));
-        commit(new JSONObject().put("update", new JSONObject().put("name", ruta(id)).put("fields", campos)));
+    /** Envía el cambio o, si no hay conexión, lo deja en cola. También lo aplica a la copia del reloj. */
+    private boolean enviar(JSONObject escritura, String id, Cambio local) throws IOException, JSONException {
+        boolean enviado = true;
+        try {
+            sincronizar();
+            commit(escritura, token());
+        } catch (Http e) {
+            throw e;
+        } catch (IOException sinConexion) {
+            synchronized (COLA) {
+                JSONArray c = new JSONArray(prefs.getString("cola", "[]"));
+                c.put(escritura);
+                prefs.edit().putString("cola", c.toString()).commit();
+            }
+            enviado = false;
+        }
+        List<Tarea> lista = id == null ? null : guardada();
+        if (lista != null) {
+            for (Tarea t : lista) if (t.id.equals(id)) local.en(t);
+            regrabar(lista);
+        }
+        return enviado;
     }
 
-    private void commit(JSONObject escritura) throws IOException, JSONException {
+    /** Cuántos cambios hechos sin conexión faltan por enviar. */
+    int porEnviar() {
+        try { return new JSONArray(prefs.getString("cola", "[]")).length(); } catch (JSONException e) { return 0; }
+    }
+
+    /** Envía en orden lo que quedó en cola. Si se cae la conexión, lo que falte sigue en cola. */
+    void sincronizar() throws IOException, JSONException {
+        synchronized (COLA) {
+            JSONArray c = new JSONArray(prefs.getString("cola", "[]"));
+            if (c.length() == 0) return;
+            String t = token();
+            while (c.length() > 0) {
+                try {
+                    commit(c.getJSONObject(0), t);
+                } catch (Http e) {
+                    // 400, 404 o 409: ese elemento ya no existe en la agenda; el cambio se descarta. Lo demás se reintenta luego.
+                    if (e.codigo != 400 && e.codigo != 404 && e.codigo != 409) throw e;
+                }
+                c.remove(0);
+                prefs.edit().putString("cola", c.toString()).commit();
+            }
+        }
+    }
+
+    private void commit(JSONObject escritura, String bearer) throws IOException, JSONException {
         String cuerpo = new JSONObject().put("writes", new JSONArray().put(escritura)).toString();
-        pedir("POST", "https://firestore.googleapis.com/v1/" + raiz() + ":commit", cuerpo, "application/json", token());
+        pedir("POST", "https://firestore.googleapis.com/v1/" + raiz() + ":commit", cuerpo, "application/json", bearer);
     }
 
     private static String pedir(String metodo, String url, String cuerpo, String tipo, String bearer) throws IOException {
@@ -190,7 +317,7 @@ final class Api {
             in.close();
         }
         c.disconnect();
-        if (estado >= 400) throw new IOException("HTTP " + estado);
+        if (estado >= 400) throw new Http(estado);
         return b.toString("UTF-8");
     }
 }
