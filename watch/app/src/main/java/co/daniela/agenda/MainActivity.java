@@ -16,8 +16,10 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.InputType;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
@@ -457,6 +459,7 @@ public class MainActivity extends Activity {
 
         raiz.addView(contorno("Actualizar", GRIS, v -> { aviso("Actualizando…"); cargar(); }), ancho(18));
         raiz.addView(version(), justo(2));
+        raiz.addView(permisoInstalar(), justo(0));
         raiz.addView(cerrarSesion(), justo(0));
 
         if (posicion >= 0) {
@@ -754,6 +757,20 @@ public class MainActivity extends Activity {
     // ---------- Actualización de la app desde el propio reloj ----------
 
     private static String textoVersion() { return "Versión " + BuildConfig.VERSION_NAME + " · Buscar nueva"; }
+
+    /** Abre el ajuste del reloj donde se permite o se quita que Agenda instale su propia actualización. */
+    private TextView permisoInstalar() {
+        TextView t = centrado("Permiso de instalación", 12, GRIS);
+        t.setPadding(dp(16), dp(8), dp(16), dp(8));
+        t.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+            } catch (RuntimeException e) {
+                avisoLargo("El reloj no dejó abrir ese ajuste");
+            }
+        });
+        return t;
+    }
 
     private TextView version() {
         TextView t = centrado(textoVersion(), 12, GRIS);
