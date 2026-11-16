@@ -18,7 +18,7 @@ import org.json.JSONObject;
 /** Conexión con Firebase por su API web, sin librerías adicionales. */
 final class Api {
     static final class Tarea {
-        String id, texto, fecha, estado, area, tipo, hora, prioridad, municipio;
+        String id, texto, fecha, estado, area, tipo, hora, horaFin, prioridad, municipio, nota;
         long creado;
     }
 
@@ -80,6 +80,8 @@ final class Api {
                     t.area = texto(f, "area");
                     t.tipo = texto(f, "tipo");
                     t.hora = texto(f, "hora");
+                    t.horaFin = texto(f, "horaFin");
+                    t.nota = texto(f, "nota");
                     t.prioridad = texto(f, "prioridad");
                     t.municipio = texto(f, "municipio");
                     if (t.municipio.isEmpty()) t.municipio = texto(f, "tema");
