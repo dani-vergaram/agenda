@@ -88,6 +88,8 @@ public class MainActivity extends Activity {
     private YearMonth mes;
     private LocalDate diaSel;
     private boolean sinConexion; // la última lectura falló y se muestran los datos guardados
+    private final Map<String, Integer> coloresEnt = new HashMap<>(); // colores de las entidades, como en la web
+    private final List<String> nombresEnt = new ArrayList<>();
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -121,6 +123,7 @@ public class MainActivity extends Activity {
         } else {
             Avisos.programar(this);
             if (vista == ENTRAR) vista = LISTA;
+            leerEntidades();
             if (vista == LISTA && ultimas == null) {
                 ultimas = api.guardada(); // lo último que se leyó, para verlo sin conexión
                 if (ultimas != null) pintar(); else pintarMensaje("Cargando…");
@@ -251,8 +254,26 @@ public class MainActivity extends Activity {
         return m.toLocalDate().equals(LocalDate.now()) ? "las " + h : fechaCorta(m.toLocalDate().toString()) + ", " + h;
     }
 
-    private static int colorArea(String area) {
-        return "CAR".equals(area) ? MENTA : "UAESP".equals(area) ? DURAZNO : GRIS;
+    /** Color de la entidad según la agenda web; si aún no se ha leído, los de siempre. */
+    private int colorArea(String area) {
+        Integer propio = coloresEnt.get(area);
+        return propio != null ? propio : "CAR".equals(area) ? MENTA : "UAESP".equals(area) ? DURAZNO : GRIS;
+    }
+
+    private void leerEntidades() {
+        coloresEnt.clear();
+        nombresEnt.clear();
+        for (Api.Entidad e : api.entidades()) {
+            if (e.nombre.isEmpty()) continue;
+            nombresEnt.add(e.nombre);
+            try { coloresEnt.put(e.nombre, Color.parseColor(e.color)); } catch (RuntimeException sinColor) { }
+        }
+    }
+
+    /** Texto oscuro o claro, según cuál se lea mejor sobre ese color. */
+    private static int sobre(int color) {
+        double luz = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) / 255;
+        return luz > 0.5 ? OSCURO : TINTA;
     }
 
     private static int colorPrioridad(String p) {
@@ -339,10 +360,13 @@ public class MainActivity extends Activity {
         fondo.execute(() -> {
             try {
                 List<Api.Tarea> todas = api.listar();
-                runOnUiThread(() -> { ultimas = todas; sinConexion = false; if (vista == LISTA) pintar(); else if (vista == CALENDARIO) pantallaCalendario(); });
+                runOnUiThread(() -> { ultimas = todas; sinConexion = false; leerEntidades(); if (vista == LISTA) pintar(); else if (vista == CALENDARIO) pantallaCalendario(); });
             } catch (Exception e) {
+                List<Api.Tarea> copia = api.guardada(); // incluye los cambios hechos sin conexión
                 runOnUiThread(() -> {
                     sinConexion = true;
+                    if (copia != null) ultimas = copia;
+                    if (vista == CALENDARIO && ultimas != null) { pantallaCalendario(); return; }
                     if (vista != LISTA) return;
                     if (ultimas == null) pintarError(); else pintar();
                 });
@@ -423,6 +447,8 @@ public class MainActivity extends Activity {
         if (!eventos.isEmpty()) resumen += " · " + eventos.size() + (eventos.size() == 1 ? " reunión" : " reuniones");
         raiz.addView(centrado(resumen, 12, GRIS));
         if (sinConexion) raiz.addView(centrado("Sin conexión · datos de " + horaGuardada(), 11, AMARILLO));
+        int cola = api.porEnviar();
+        if (cola > 0) raiz.addView(centrado(cola + (cola == 1 ? " cambio por enviar" : " cambios por enviar"), 11, AMARILLO));
 
         if (proxima != null) raiz.addView(tarjetaProxima(proxima, ahora, dia), ancho(10));
 
@@ -582,7 +608,7 @@ public class MainActivity extends Activity {
         String hoy = LocalDate.now().toString();
 
         if (!t.area.isEmpty()) {
-            TextView chip = negrita(centrado(t.area, 11, OSCURO));
+            TextView chip = negrita(centrado(t.area, 11, sobre(colorArea(t.area))));
             chip.setBackground(redondo(colorArea(t.area), 12));
             chip.setPadding(dp(12), dp(3), dp(12), dp(3));
             raiz.addView(chip, justo(0));
@@ -615,6 +641,18 @@ public class MainActivity extends Activity {
         if (!evento) {
             raiz.addView(pastilla(hecho ? "Quitar ✓" : "✓  Hecho", MENTA, OSCURO,
                 v -> accion(() -> api.cambiarEstado(t.id, hecho ? "pendiente" : "hecho"))), ancho(12));
+            if (!hecho && !tachado) { // aplazar sin abrir la agenda completa
+                LocalDate dia = LocalDate.now();
+                LocalDate lunes = dia.plusDays(8 - dia.getDayOfWeek().getValue());
+                LinearLayout mover = new LinearLayout(this);
+                LinearLayout.LayoutParams mitad = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+                mitad.rightMargin = dp(6);
+                mover.addView(contorno("Mañana", ROSA, v -> accion(() -> api.mover(t.id, dia.plusDays(1).toString()))), mitad);
+                mover.addView(contorno("El lunes", ROSA, v -> accion(() -> api.mover(t.id, lunes.toString()))),
+                    new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+                raiz.addView(seccion("Mover a", GRIS), ancho(10));
+                raiz.addView(mover, ancho(4));
+            }
             raiz.addView(contorno(tachado ? "Destachar" : "Tachar", DURAZNO,
                 v -> accion(() -> api.cambiarEstado(t.id, tachado ? "pendiente" : "tachado"))), ancho(6));
         }
@@ -737,13 +775,29 @@ public class MainActivity extends Activity {
         limpiar(NUEVO);
         scroll.scrollTo(0, 0);
         raiz.addView(negrita(centrado("Nuevo pendiente", 15, TINTA)), ancho(8));
-        raiz.addView(centrado("Queda para hoy", 11, GRIS));
-        EditText nuevo = campo("Escribe aquí", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        raiz.addView(nuevo, ancho(10));
+        EditText nuevo = campo("Escribe o dicta aquí", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        raiz.addView(nuevo, ancho(8));
+
+        // Cada opción cambia al tocarla: para qué día y de qué entidad.
+        String[] dias = { "Hoy", "Mañana", "El lunes" };
+        int[] dia = { 0 }, area = { -1 }; // -1: sin entidad
+        TextView cuando = contorno("Para: " + dias[0], ROSA, null);
+        cuando.setOnClickListener(v -> { dia[0] = (dia[0] + 1) % dias.length; cuando.setText("Para: " + dias[dia[0]]); });
+        raiz.addView(cuando, ancho(6));
+        TextView donde = contorno("Entidad: ninguna", GRIS, null);
+        donde.setOnClickListener(v -> {
+            area[0] = area[0] + 1 >= nombresEnt.size() ? -1 : area[0] + 1;
+            donde.setText("Entidad: " + (area[0] < 0 ? "ninguna" : nombresEnt.get(area[0])));
+        });
+        if (!nombresEnt.isEmpty()) raiz.addView(donde, ancho(6));
+
         raiz.addView(pastilla("Agregar", MENTA, OSCURO, v -> {
             String s = nuevo.getText().toString().trim();
             if (s.isEmpty()) return;
-            accion(() -> api.crear(s, LocalDate.now().toString()));
+            LocalDate hoy = LocalDate.now();
+            LocalDate fecha = dia[0] == 0 ? hoy : dia[0] == 1 ? hoy.plusDays(1) : hoy.plusDays(8 - hoy.getDayOfWeek().getValue());
+            String entidad = area[0] < 0 ? "" : nombresEnt.get(area[0]);
+            accion(() -> api.crear(s, fecha.toString(), entidad));
         }), ancho(8));
         raiz.addView(contorno("Volver", GRIS, v -> volver()), ancho(6));
     }
@@ -834,14 +888,16 @@ public class MainActivity extends Activity {
         }
     }
 
-    private interface Accion { void correr() throws Exception; }
+    /** Devuelve false si el cambio quedó guardado en el reloj por falta de conexión. */
+    private interface Accion { boolean correr() throws Exception; }
 
     /** Guarda un cambio y vuelve a la lista actualizada. */
     private void accion(Accion a) {
         fondo.execute(() -> {
             try {
-                a.correr();
+                boolean enviado = a.correr();
                 runOnUiThread(() -> {
+                    if (!enviado) aviso("Guardado en el reloj. Se envía al tener conexión");
                     if (vista == DETALLE && origen == CALENDARIO) vista = CALENDARIO;
                     else if (vista != CALENDARIO) vista = LISTA;
                     cargar();
