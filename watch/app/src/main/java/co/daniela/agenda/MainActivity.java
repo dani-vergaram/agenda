@@ -135,6 +135,11 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() { fondo.shutdown(); super.onDestroy(); }
 
+    @Override protected void onPause() {
+        super.onPause();
+        Tarjeta.actualizar(this); // la tarjeta y la esfera muestran lo último que quedó guardado
+    }
+
     @Override public void onBackPressed() {
         if (vista == DETALLE || vista == NUEVO || vista == CALENDARIO) volver(); else super.onBackPressed();
     }
