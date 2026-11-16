@@ -108,6 +108,7 @@ public class Avisos extends JobService {
             ed.putBoolean("resumen", true);
         }
         ed.apply();
+        Tarjeta.actualizar(c); // refresca la tarjeta y la esfera con lo recién leído
     }
 
     private static Notification.Builder aviso(Context c, String titulo, String texto) {
@@ -138,6 +139,7 @@ public class Avisos extends JobService {
                     if ("hecho".equals(que)) api.cambiarEstado(id, "hecho");
                     else api.mover(id, LocalDate.now().plusDays(1).toString());
                     c.getSystemService(NotificationManager.class).cancel(numero);
+                    Tarjeta.actualizar(c);
                 } catch (Exception ignorado) { }
                 resultado.finish();
             }).start();
