@@ -93,8 +93,52 @@ final class Api {
             }
             pagina = r.optString("nextPageToken", "");
         } while (!pagina.isEmpty());
+        guardar(lista);
         return lista;
     }
+
+    /** Guarda en el reloj la última lista leída, para poder verla sin conexión. */
+    private void guardar(List<Tarea> lista) throws JSONException {
+        JSONArray a = new JSONArray();
+        for (Tarea t : lista) {
+            a.put(new JSONArray().put(t.id).put(t.texto).put(t.fecha).put(t.estado).put(t.area).put(t.tipo)
+                .put(t.hora).put(t.horaFin).put(t.prioridad).put(t.municipio).put(t.nota).put(t.creado));
+        }
+        prefs.edit().putString("cache", a.toString()).putLong("cacheHora", System.currentTimeMillis()).apply();
+    }
+
+    /** Última lista guardada en el reloj, o null si todavía no hay ninguna. */
+    List<Tarea> guardada() {
+        String s = prefs.getString("cache", null);
+        if (s == null) return null;
+        try {
+            JSONArray a = new JSONArray(s);
+            List<Tarea> lista = new ArrayList<>();
+            for (int i = 0; i < a.length(); i++) {
+                JSONArray f = a.getJSONArray(i);
+                Tarea t = new Tarea();
+                t.id = f.getString(0);
+                t.texto = f.getString(1);
+                t.fecha = f.getString(2);
+                t.estado = f.getString(3);
+                t.area = f.getString(4);
+                t.tipo = f.getString(5);
+                t.hora = f.getString(6);
+                t.horaFin = f.getString(7);
+                t.prioridad = f.getString(8);
+                t.municipio = f.getString(9);
+                t.nota = f.getString(10);
+                t.creado = f.getLong(11);
+                lista.add(t);
+            }
+            return lista;
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    /** Momento (en milisegundos) en que se guardó la última lista. */
+    long horaGuardada() { return prefs.getLong("cacheHora", 0); }
 
     private static String texto(JSONObject f, String k) {
         JSONObject v = f.optJSONObject(k);
