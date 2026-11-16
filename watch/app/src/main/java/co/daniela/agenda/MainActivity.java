@@ -42,9 +42,12 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -82,6 +85,7 @@ public class MainActivity extends Activity {
     private int origen = LISTA; // pantalla desde la que se abrió el detalle
     private YearMonth mes;
     private LocalDate diaSel;
+    private boolean sinConexion; // la última lectura falló y se muestran los datos guardados
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -115,7 +119,10 @@ public class MainActivity extends Activity {
         } else {
             Avisos.programar(this);
             if (vista == ENTRAR) vista = LISTA;
-            if (vista == LISTA && ultimas == null) pintarMensaje("Cargando…");
+            if (vista == LISTA && ultimas == null) {
+                ultimas = api.guardada(); // lo último que se leyó, para verlo sin conexión
+                if (ultimas != null) pintar(); else pintarMensaje("Cargando…");
+            }
             cargar();
         }
         scroll.requestFocus();
@@ -235,6 +242,13 @@ public class MainActivity extends Activity {
 
     private void avisoLargo(String s) { Toast.makeText(this, s, Toast.LENGTH_LONG).show(); }
 
+    /** Cuándo se leyó la agenda por última vez: "las 15:40" o "15 nov, 15:40". */
+    private String horaGuardada() {
+        LocalDateTime m = LocalDateTime.ofInstant(Instant.ofEpochMilli(api.horaGuardada()), ZoneId.systemDefault());
+        String h = m.toLocalTime().toString().substring(0, 5);
+        return m.toLocalDate().equals(LocalDate.now()) ? "las " + h : fechaCorta(m.toLocalDate().toString()) + ", " + h;
+    }
+
     private static int colorArea(String area) {
         return "CAR".equals(area) ? MENTA : "UAESP".equals(area) ? DURAZNO : GRIS;
     }
@@ -323,11 +337,12 @@ public class MainActivity extends Activity {
         fondo.execute(() -> {
             try {
                 List<Api.Tarea> todas = api.listar();
-                runOnUiThread(() -> { ultimas = todas; if (vista == LISTA) pintar(); else if (vista == CALENDARIO) pantallaCalendario(); });
+                runOnUiThread(() -> { ultimas = todas; sinConexion = false; if (vista == LISTA) pintar(); else if (vista == CALENDARIO) pantallaCalendario(); });
             } catch (Exception e) {
                 runOnUiThread(() -> {
+                    sinConexion = true;
                     if (vista != LISTA) return;
-                    if (ultimas == null) pintarError(); else aviso("Sin conexión");
+                    if (ultimas == null) pintarError(); else pintar();
                 });
             }
         });
@@ -405,6 +420,7 @@ public class MainActivity extends Activity {
         String resumen = porHacer == 0 ? "Todo al día" : porHacer + (porHacer == 1 ? " pendiente" : " pendientes");
         if (!eventos.isEmpty()) resumen += " · " + eventos.size() + (eventos.size() == 1 ? " reunión" : " reuniones");
         raiz.addView(centrado(resumen, 12, GRIS));
+        if (sinConexion) raiz.addView(centrado("Sin conexión · datos de " + horaGuardada(), 11, AMARILLO));
 
         if (proxima != null) raiz.addView(tarjetaProxima(proxima, ahora, dia), ancho(10));
 
