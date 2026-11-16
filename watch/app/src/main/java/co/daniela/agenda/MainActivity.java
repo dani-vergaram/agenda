@@ -20,6 +20,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.speech.RecognizerIntent;
 import android.text.InputType;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
     private static final int LISTA = 0, DETALLE = 1, NUEVO = 2, ENTRAR = 3, CALENDARIO = 4;
     private static final String URL_APK = "https://dani-vergaram.github.io/agenda/agenda-reloj.apk";
     private static final String ACCION_INSTALAR = "co.daniela.agenda.INSTALAR";
+    private static final int PEDIR_VOZ = 7;
     private static final Locale ES = new Locale("es", "CO");
     private static final DateTimeFormatter DIA_LARGO = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", ES);
     private static final DateTimeFormatter DIA_CORTO = DateTimeFormatter.ofPattern("d MMM", ES);
@@ -90,6 +92,7 @@ public class MainActivity extends Activity {
     private boolean sinConexion; // la última lectura falló y se muestran los datos guardados
     private final Map<String, Integer> coloresEnt = new HashMap<>(); // colores de las entidades, como en la web
     private final List<String> nombresEnt = new ArrayList<>();
+    private EditText campoVoz; // casilla que espera el texto dictado
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -782,6 +785,7 @@ public class MainActivity extends Activity {
         raiz.addView(negrita(centrado("Nuevo pendiente", 15, TINTA)), ancho(8));
         EditText nuevo = campo("Escribe o dicta aquí", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         raiz.addView(nuevo, ancho(8));
+        raiz.addView(pastilla("Dictar", TARJETA, MENTA, v -> dictar(nuevo)), ancho(6));
 
         // Cada opción cambia al tocarla: para qué día y de qué entidad.
         String[] dias = { "Hoy", "Mañana", "El lunes" };
@@ -805,6 +809,27 @@ public class MainActivity extends Activity {
             accion(() -> api.crear(s, fecha.toString(), entidad));
         }), ancho(8));
         raiz.addView(contorno("Volver", GRIS, v -> volver()), ancho(6));
+    }
+
+    /** Abre el dictado del reloj; lo que se diga queda escrito en la casilla. */
+    private void dictar(EditText destino) {
+        campoVoz = destino;
+        Intent voz = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-CO")
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Di el pendiente");
+        try {
+            startActivityForResult(voz, PEDIR_VOZ);
+        } catch (RuntimeException e) {
+            avisoLargo("Este reloj no abrió el dictado. Usa el teclado");
+        }
+    }
+
+    @Override protected void onActivityResult(int pedido, int resultado, Intent datos) {
+        super.onActivityResult(pedido, resultado, datos);
+        if (pedido != PEDIR_VOZ || resultado != RESULT_OK || datos == null || campoVoz == null) return;
+        ArrayList<String> frases = datos.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if (frases != null && !frases.isEmpty()) campoVoz.setText(mayuscula(frases.get(0).trim()));
     }
 
     private void volver() {
