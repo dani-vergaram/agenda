@@ -13,8 +13,8 @@ android {
         applicationId "co.daniela.agenda"
         minSdk 30
         targetSdk 34
-        versionCode 7
-        versionName "1.4"
+        versionCode 8
+        versionName "1.5"
         buildConfigField "String", "API_KEY", "\"${valor('apiKey')}\""
         buildConfigField "String", "PROJECT_ID", "\"${valor('projectId')}\""
     }
