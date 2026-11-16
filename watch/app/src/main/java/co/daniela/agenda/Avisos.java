@@ -8,10 +8,12 @@ import android.app.job.JobInfo;
 import android.app.job.JobParameters;
 import android.app.job.JobScheduler;
 import android.app.job.JobService;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.drawable.Icon;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -20,6 +22,7 @@ import java.time.LocalTime;
 public class Avisos extends JobService {
     private static final int TRABAJO = 1;
     private static final String CANAL = "agenda";
+    private static final int HORA_RESUMEN = 7; // desde las 7:00 a. m. llega el resumen del día
 
     static void programar(Context c) {
         JobScheduler js = c.getSystemService(JobScheduler.class);
@@ -60,31 +63,84 @@ public class Avisos extends JobService {
         boolean diaNuevo = !hoy.equals(avisados.getString("dia", ""));
         if (diaNuevo) { ed.clear(); ed.putString("dia", hoy); }
 
+        int reuniones = 0, pendientes = 0, urgentes = 0;
+        String primera = "";
         for (Api.Tarea t : api.listar()) {
             if (!"pendiente".equals(t.estado)) continue;
-            String clave = null, titulo = null;
-            if ("evento".equals(t.tipo)) {
-                if (!hoy.equals(t.fecha) || t.hora.isEmpty()) continue;
-                long faltan = Duration.between(ahora, LocalTime.parse(t.hora)).toMinutes();
+            boolean evento = "evento".equals(t.tipo);
+            String clave, titulo;
+            if (evento) {
+                if (!hoy.equals(t.fecha)) continue;
+                reuniones++;
+                if (t.hora.isEmpty()) continue;
+                if (primera.isEmpty() || t.hora.compareTo(primera) < 0) primera = t.hora;
+                long faltan;
+                try { faltan = Duration.between(ahora, LocalTime.parse(t.hora)).toMinutes(); } catch (RuntimeException horaRara) { continue; }
                 if (faltan < 0 || faltan > 30) continue;
                 clave = "r" + t.id;
                 titulo = "Reunión a las " + t.hora;
-            } else if ("alta".equals(t.prioridad) && !t.fecha.isEmpty() && t.fecha.compareTo(hoy) <= 0 && ahora.getHour() >= 8) {
+            } else {
+                if (t.fecha.isEmpty() || t.fecha.compareTo(hoy) > 0) continue;
+                pendientes++;
+                if (!"alta".equals(t.prioridad)) continue;
+                urgentes++;
+                if (ahora.getHour() < 8) continue;
                 clave = "u" + t.id;
                 titulo = t.fecha.equals(hoy) ? "Urgente para hoy" : "Urgente atrasado";
             }
-            if (clave == null || (!diaNuevo && avisados.contains(clave))) continue;
-            PendingIntent abrir = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
-            Notification n = new Notification.Builder(c, CANAL)
-                .setSmallIcon(android.R.drawable.ic_popup_reminder)
-                .setContentTitle(titulo)
-                .setContentText(t.texto)
-                .setContentIntent(abrir)
-                .setAutoCancel(true)
-                .build();
-            nm.notify(clave.hashCode(), n);
+            if (!diaNuevo && avisados.contains(clave)) continue;
+            Notification.Builder n = aviso(c, titulo, t.texto);
+            if (!evento) { // los urgentes se pueden resolver desde el mismo aviso
+                n.addAction(boton(c, "Hecho", "hecho", android.R.drawable.checkbox_on_background, t.id, clave.hashCode()));
+                n.addAction(boton(c, "Mañana", "manana", android.R.drawable.ic_menu_recent_history, t.id, clave.hashCode()));
+            }
+            nm.notify(clave.hashCode(), n.build());
             ed.putBoolean(clave, true);
         }
+
+        // Resumen del día, una sola vez cada mañana.
+        boolean yaResumen = !diaNuevo && avisados.contains("resumen");
+        if (!yaResumen && ahora.getHour() >= HORA_RESUMEN && ahora.getHour() < 12 && reuniones + pendientes > 0) {
+            String texto = reuniones + (reuniones == 1 ? " reunión" : " reuniones") + (primera.isEmpty() ? "" : " (la primera a las " + primera + ")")
+                + " · " + pendientes + (pendientes == 1 ? " pendiente" : " pendientes")
+                + (urgentes == 0 ? "" : ", " + urgentes + (urgentes == 1 ? " urgente" : " urgentes"));
+            nm.notify(1, aviso(c, "Tu día", texto).setStyle(new Notification.BigTextStyle().bigText(texto)).build());
+            ed.putBoolean("resumen", true);
+        }
         ed.apply();
+    }
+
+    private static Notification.Builder aviso(Context c, String titulo, String texto) {
+        PendingIntent abrir = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+        return new Notification.Builder(c, CANAL)
+            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setContentTitle(titulo)
+            .setContentText(texto)
+            .setContentIntent(abrir)
+            .setAutoCancel(true);
+    }
+
+    private static Notification.Action boton(Context c, String texto, String que, int icono, String id, int numero) {
+        Intent i = new Intent(c, Boton.class).setAction(que).putExtra("id", id).putExtra("aviso", numero);
+        PendingIntent p = PendingIntent.getBroadcast(c, (que + id).hashCode(), i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return new Notification.Action.Builder(Icon.createWithResource(c, icono), texto, p).build();
+    }
+
+    /** Botones "Hecho" y "Mañana" de los avisos: guardan el cambio sin abrir la app. */
+    public static class Boton extends BroadcastReceiver {
+        @Override public void onReceive(Context c, Intent i) {
+            PendingResult resultado = goAsync();
+            String id = i.getStringExtra("id"), que = i.getAction();
+            int numero = i.getIntExtra("aviso", 0);
+            new Thread(() -> {
+                try {
+                    Api api = new Api(c.getSharedPreferences("sesion", Context.MODE_PRIVATE));
+                    if ("hecho".equals(que)) api.cambiarEstado(id, "hecho");
+                    else api.mover(id, LocalDate.now().plusDays(1).toString());
+                    c.getSystemService(NotificationManager.class).cancel(numero);
+                } catch (Exception ignorado) { }
+                resultado.finish();
+            }).start();
+        }
     }
 }
