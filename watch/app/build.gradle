@@ -35,3 +35,11 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+dependencies {
+    // Tarjeta del reloj y dato para la esfera.
+    implementation "androidx.wear.tiles:tiles:1.4.0"
+    implementation "androidx.wear.protolayout:protolayout:1.2.0"
+    implementation "androidx.wear.watchface:watchface-complications-data-source:1.2.1"
+    implementation "com.google.guava:guava:33.3.1-android"
+}
